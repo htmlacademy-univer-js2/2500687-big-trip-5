@@ -6,10 +6,12 @@ import TripPoint from '../view/trip-point.js';
 import {render} from '../render.js';
 
 export default class TripPresenter {
-  constructor() {
+  #model = null;
+  constructor(model) {
+    this.#model = model;
     this.filters = new FiltersView();
     this.sort = new SortView();
-    this.tripFormEdit = new TripFormEdit();
+    //this.tripFormEdit = new TripFormEdit();
     this.tripFormCreate = new TripFormCreate();
   }
 
@@ -30,13 +32,19 @@ export default class TripPresenter {
     render({ getElement: () => list }, tripEventsContainer);
 
     // Форма редактирования
-    render(this.tripFormEdit, list);
-
-    // 3 точки маршрута
-    for (let i = 0; i < 3; i++) {
-      const tripPoint = new TripPoint(); // Создаём новый экземпляр для каждой точки
-      render(tripPoint, list);
+    const firstPoint = this.#model.points[0];
+    if (firstPoint) {
+      const tripFormEdit = new TripFormEdit(firstPoint, this.#model.destinations, this.#model.offersByType);
+      render(tripFormEdit, list);
     }
+
+    // Отрисовка точек маршрута
+    this.#model.points.forEach((point) => {
+      const destination = this.#model.getDestinationById(point.destinationId);
+      const offers = this.#model.getOffersByType(point.type).filter((offer) => point.offers.includes(offer.id));
+      const tripPoint = new TripPoint(point, destination, offers);
+      render(tripPoint, list);
+    });
 
     // Форма создания
     render(this.tripFormCreate, list);
