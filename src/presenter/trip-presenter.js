@@ -4,6 +4,7 @@ import TripFormEdit from '../view/trip-form-editor.js';
 import TripFormCreate from '../view/trip-form-creation.js';
 import TripPoint from '../view/trip-point.js';
 import TripListView from '../view/trip-list-view.js';
+import EmptyListView from '../view/empty-list-view.js';
 import {render, replace} from '../framework/render.js';
 
 export default class TripPresenter {
@@ -11,12 +12,20 @@ export default class TripPresenter {
   #tripListComponent = new TripListView();
   #pointComponents = new Map(); // Для хранения пар TripPoint и TripFormEdit
   #currentEditingPointId = null; // Для отслеживания открытой формы
+  #currentFilterType = 'everything'; // Текущий фильтр
+  #filtersComponent = null;
+  #emptyListComponent = null;
 
   constructor(model) {
     this.#model = model;
-    this.filters = new FiltersView();
-    this.sort = new SortView();
+    this.#filtersComponent = new FiltersView(
+      this.#model.points,
+      this.#currentFilterType,
+      this.#handleFilterChange
+    );
+    this.sort = new SortView({ currentSortType: 'day', disabledSortTypes: ['event', 'offer'] });
     this.tripFormCreate = new TripFormCreate(this.#model.destinations, this.#model.offersByType);
+    this.#emptyListComponent = new EmptyListView(this.#currentFilterType);
   }
 
   init() {
@@ -24,25 +33,21 @@ export default class TripPresenter {
     const tripEventsContainer = document.querySelector('.trip-events');
 
     // Отрисовка фильтров
-    render(this.filters, filtersContainer);
+    render(this.#filtersComponent, filtersContainer);
 
     //Отрисовка сортировки
     render(this.sort, tripEventsContainer);
 
     // Отрисовка контента
-    render(this.#tripListComponent, tripEventsContainer);
+    if (this.#model.points.length === 0) {
+      render(this.#emptyListComponent, tripEventsContainer);
+    } else {
+      render(this.#tripListComponent, tripEventsContainer);
 
-    // Форма редактирования
-    //const firstPoint = this.#model.points[0];
-    //if (firstPoint) {
-    //const tripFormEdit = new TripFormEdit(firstPoint, this.#model.destinations, this.#model.offersByType);
-    //render(tripFormEdit, this.#tripListComponent.element);
-    //}
-
-    // Отрисовка точек маршрута
-    this.#model.points.forEach((point) => {
-      this.#renderPoint(point);
-    });
+      this.#model.points.forEach((point) => {
+        this.#renderPoint(point);
+      });
+    }
 
     // Форма создания
     render(this.tripFormCreate, this.#tripListComponent.element);
@@ -96,6 +101,18 @@ export default class TripPresenter {
         replace(components.tripPoint, components.tripFormEdit);
         this.#currentEditingPointId = null; // Сбрасываем ID
       }
+    }
+  };
+
+  #handleFilterChange = (newFilterType) => {
+    this.#currentFilterType = newFilterType;
+
+    // Обновляем EmptyListView, если список пуст
+    if (this.#model.points.length === 0) {
+
+      const newEmptyListComponent = new EmptyListView(this.#currentFilterType);
+      replace(newEmptyListComponent, this.#emptyListComponent);
+      this.#emptyListComponent = newEmptyListComponent;
     }
   };
 }

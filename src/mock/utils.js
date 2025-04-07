@@ -65,3 +65,13 @@ export const formatDateTime = (date) => {
   const minutes = date.getMinutes().toString().padStart(2, '0');
   return `${day}/${month}/${year} ${hours}:${minutes}`;
 };
+
+export const isFuturePoint = (point, currentDate = new Date()) => new Date(point.dateFrom) > currentDate;
+
+export const isPresentPoint = (point, currentDate = new Date()) => {
+  const dateFrom = new Date(point.dateFrom);
+  const dateTo = new Date(point.dateTo);
+  return dateFrom <= currentDate && currentDate <= dateTo;
+};
+
+export const isPastPoint = (point, currentDate = new Date()) => new Date(point.dateTo) < currentDate;
