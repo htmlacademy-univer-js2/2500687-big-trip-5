@@ -1,17 +1,25 @@
+import AbstractView from '../framework/view/abstract-view.js';
 import {formatDate, formatTime, getDuration} from '../mock/utils';
 
-export default class TripPoint {
+
+export default class TripPoint extends AbstractView {
   #point = null;
   #destination = null;
   #offers = [];
+  #handleEditClick = null;
 
-  constructor(point, destination, offers) {
+  constructor(point, destination, offers, onEditClick) {
+    super();
     this.#point = point;
     this.#destination = destination;
     this.#offers = offers;
+    this.#handleEditClick = onEditClick;
+
+    // Навешиваем обработчик
+    this.element.querySelector('.event__rollup-btn').addEventListener('click', this.#editClickHandler);
   }
 
-  getTemplate(){
+  get template(){
     const { type, dateFrom, dateTo, basePrice, isFavorite } = this.#point;
     const destinationName = this.#destination ? this.#destination.name : '';
     const startDate = new Date(dateFrom);
@@ -58,9 +66,8 @@ export default class TripPoint {
     `;
   }
 
-  getElement() {
-    const element = document.createElement('div');
-    element.innerHTML = this.getTemplate();
-    return element.firstElementChild;
-  }
+  #editClickHandler = (evt) => {
+    evt.preventDefault();
+    this.#handleEditClick();
+  };
 }
