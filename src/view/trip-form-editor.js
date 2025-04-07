@@ -1,17 +1,32 @@
 import {formatDateTime} from '../mock/utils';
+import AbstractView from '../framework/view/abstract-view.js';
 
-export default class TripFormEdit {
+export default class TripFormEdit extends AbstractView {
   #point = null;
   #destinations = [];
   #offersByType = {};
+  #handleFormSubmit = null;
+  #handleRollupClick = null;
 
-  constructor(point, destinations, offersByType) {
+  constructor(point, destinations, offersByType, onFormSubmit, onRollupClick) {
+    super();
     this.#point = point;
     this.#destinations = destinations;
     this.#offersByType = offersByType;
+    this.#handleFormSubmit = onFormSubmit;
+    this.#handleRollupClick = onRollupClick;
+
+    // Навешиваем обработчик на отправку формы
+    this.element.querySelector('form.event--edit').addEventListener('submit', this.#formSubmitHandler);
+
+    // Кнопка "Стрелка вверх" в форме редактирования
+    const rollupBtn = this.element.querySelector('.event__rollup-btn');
+    if (rollupBtn) {
+      rollupBtn.addEventListener('click', this.#rollupClickHandler);
+    }
   }
 
-  getTemplate() {
+  get template() {
     const { type, destinationId, dateFrom, dateTo, basePrice, offers } = this.#point;
     const destination = this.#destinations.find((dest) => dest.id === destinationId) || { name: '', description: '', pictures: [] };
     const availableOffers = this.#offersByType[type] || [];
@@ -106,9 +121,14 @@ export default class TripFormEdit {
     `;
   }
 
-  getElement() {
-    const element = document.createElement('div');
-    element.innerHTML = this.getTemplate();
-    return element.firstElementChild;
-  }
+  #formSubmitHandler = (evt) => {
+    evt.preventDefault();
+    this.#handleFormSubmit();
+  };
+
+  #rollupClickHandler = (evt) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    this.#handleRollupClick();
+  };
 }
