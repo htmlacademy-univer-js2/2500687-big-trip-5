@@ -1,16 +1,15 @@
 import FiltersView from '../view/filters-view.js';
 import SortView from '../view/sort-view.js';
-import TripFormEdit from '../view/trip-form-editor.js';
 import TripFormCreate from '../view/trip-form-creation.js';
-import TripPoint from '../view/trip-point.js';
 import TripListView from '../view/trip-list-view.js';
 import EmptyListView from '../view/empty-list-view.js';
+import PointPresenter from './point-presenter.js';
 import {render, replace} from '../framework/render.js';
 
 export default class TripPresenter {
   #model = null;
   #tripListComponent = new TripListView();
-  #pointComponents = new Map(); // Для хранения пар TripPoint и TripFormEdit
+  #pointPresenters = new Map(); // Для хранения пар TripPoint и TripFormEdit
   #currentEditingPointId = null; // Для отслеживания открытой формы
   #currentFilterType = 'everything'; // Текущий фильтр
   #filtersComponent = null;
@@ -38,68 +37,87 @@ export default class TripPresenter {
     //Отрисовка сортировки
     render(this.sort, tripEventsContainer);
 
+    render(this.#tripListComponent, tripEventsContainer);
+
     // Отрисовка контента
     if (this.#model.points.length === 0) {
       render(this.#emptyListComponent, tripEventsContainer);
     } else {
-      render(this.#tripListComponent, tripEventsContainer);
-
       this.#model.points.forEach((point) => {
-        this.#renderPoint(point);
+        this.#createPointPresenter(point);
       });
     }
 
     // Форма создания
-    render(this.tripFormCreate, this.#tripListComponent.element);
+    render(this.tripFormCreate, tripEventsContainer);
 
     document.addEventListener('keydown', this.#handleEscKeyDown);
   }
 
-  #renderPoint(point) {
+  #createPointPresenter(point) {
     const destination = this.#model.getDestinationById(point.destinationId);
     const offers = this.#model.getOffersByType(point.type).filter((offer) => point.offers.includes(offer.id));
 
-    const tripPoint = new TripPoint(
+    const pointPresenter = new PointPresenter({
       point,
       destination,
       offers,
-      () => {
-        // Обработчик для кнопки "Open event"
-        const components = this.#pointComponents.get(point.id);
-        replace(components.tripFormEdit, components.tripPoint);
-        this.#currentEditingPointId = point.id;
-      }
-    );
+      destinations: this.#model.destinations,
+      offersByType: this.#model.offersByType,
+      tripListComponent: this.#tripListComponent,
+      onDataChange: this.#handlePointChange,
+      onEditStart: this.#notifyPointEditStarted,
+    });
 
-    const tripFormEdit = new TripFormEdit(
-      point,
-      this.#model.destinations,
-      this.#model.offersByType,
-      () => {
-        // Закрываем форму при submit
-        const components = this.#pointComponents.get(point.id);
-        replace(components.tripPoint, components.tripFormEdit);
-        this.#currentEditingPointId = null; // Сбрасываем ID
-      },
-      () => {
-        // Закрываем форму при клике на "Стрелка вверх"
-        const components = this.#pointComponents.get(point.id);
-        replace(components.tripPoint, components.tripFormEdit);
-        this.#currentEditingPointId = null; // Сбрасываем ID
-      }
-    );
-
-    this.#pointComponents.set(point.id, { tripPoint, tripFormEdit });
-    render(tripPoint, this.#tripListComponent.element);
+    this.#pointPresenters.set(point.id, pointPresenter);
   }
+
+  #handlePointChange = (updatedPoint) => {
+    const pointPresenter = this.#pointPresenters.get(updatedPoint.id);
+    const previousSibling = pointPresenter.element?.previousElementSibling; // Сохраняем предыдущий элемент
+
+    this.#model.updatePoint(updatedPoint.id, updatedPoint);
+    pointPresenter.destroy();
+    this.#pointPresenters.delete(updatedPoint.id);
+
+    // Создаём новый презентер
+    this.#createPointPresenter(updatedPoint);
+
+    // Вставляем точку на прежнее место
+    const newPresenter = this.#pointPresenters.get(updatedPoint.id);
+    if (previousSibling) {
+      this.#tripListComponent.element.insertBefore(newPresenter.element, previousSibling.nextSibling);
+    } else {
+      this.#tripListComponent.element.prepend(newPresenter.element); // Если это была первая точка
+    }
+  };
+
+  #notifyPointEditStarted = (pointId) => {
+    // Если уже есть открытая форма, закрываем её
+    if (this.#currentEditingPointId && this.#currentEditingPointId !== pointId) {
+      const previousPresenter = this.#pointPresenters.get(this.#currentEditingPointId);
+      if (previousPresenter) {
+        previousPresenter.resetView();
+      }
+    }
+
+    // Открываем форму для текущей точки
+    const currentPresenter = this.#pointPresenters.get(pointId);
+    if (currentPresenter) {
+      currentPresenter.switchToEditMode();
+    }
+    this.#currentEditingPointId = pointId;
+  };
 
   #handleEscKeyDown = (evt) => {
     if (evt.key === 'Escape' || evt.key === 'Esc') {
       evt.preventDefault();
       if (this.#currentEditingPointId) {
-        const components = this.#pointComponents.get(this.#currentEditingPointId);
-        replace(components.tripPoint, components.tripFormEdit);
-        this.#currentEditingPointId = null; // Сбрасываем ID
+        const pointPresenter = this.#pointPresenters.get(this.#currentEditingPointId);
+        if (pointPresenter) {
+          pointPresenter.resetView(); // Переключаем в режим просмотра
+        }
+        this.#currentEditingPointId = null;
       }
     }
   };
