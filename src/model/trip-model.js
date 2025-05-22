@@ -28,4 +28,11 @@ export default class TripModel {
   getOffersByType(type) {
     return this.#offersByType[type] || [];
   }
+
+  updatePoint(id, updatedPoint) {
+    const index = this.#points.findIndex((point) => point.id === id);
+    if (index !== -1) {
+      this.#points[index] = { ...this.#points[index], ...updatedPoint };
+    }
+  }
 }
