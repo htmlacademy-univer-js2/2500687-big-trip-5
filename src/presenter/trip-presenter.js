@@ -12,8 +12,10 @@ export default class TripPresenter {
   #pointPresenters = new Map(); // Для хранения пар TripPoint и TripFormEdit
   #currentEditingPointId = null; // Для отслеживания открытой формы
   #currentFilterType = 'everything'; // Текущий фильтр
+  #currentSortType = 'day'; // Текущий тип сортировки
   #filtersComponent = null;
   #emptyListComponent = null;
+  #sortComponent = null;
 
   constructor(model) {
     this.#model = model;
@@ -22,7 +24,13 @@ export default class TripPresenter {
       this.#currentFilterType,
       this.#handleFilterChange
     );
-    this.sort = new SortView({ currentSortType: 'day', disabledSortTypes: ['event', 'offer'] });
+
+    this.#sortComponent = new SortView({
+      currentSortType: this.#currentSortType,
+      disabledSortTypes: ['event', 'offer'],
+      onSortTypeChange: this.#handleSortTypeChange, // Передаём колбэк
+    });
+
     this.tripFormCreate = new TripFormCreate(this.#model.destinations, this.#model.offersByType);
     this.#emptyListComponent = new EmptyListView(this.#currentFilterType);
   }
@@ -35,17 +43,15 @@ export default class TripPresenter {
     render(this.#filtersComponent, filtersContainer);
 
     //Отрисовка сортировки
-    render(this.sort, tripEventsContainer);
+    render(this.#sortComponent, tripEventsContainer);
 
     render(this.#tripListComponent, tripEventsContainer);
 
     // Отрисовка контента
     if (this.#model.points.length === 0) {
-      render(this.#emptyListComponent, tripEventsContainer);
+      render(this.#emptyListComponent, this.#tripListComponent.element);
     } else {
-      this.#model.points.forEach((point) => {
-        this.#createPointPresenter(point);
-      });
+      this.#renderPoints();
     }
 
     // Форма создания
@@ -53,6 +59,62 @@ export default class TripPresenter {
 
     document.addEventListener('keydown', this.#handleEscKeyDown);
   }
+
+  #renderPoints() {
+    // Очищаем текущие презентеры
+    this.#pointPresenters.forEach((presenter) => presenter.destroy());
+    this.#pointPresenters.clear();
+
+    // Сортируем точки
+    const sortedPoints = this.#sortPoints(this.#model.points);
+
+    // Отрисовываем точки в отсортированном порядке
+    sortedPoints.forEach((point) => {
+      this.#createPointPresenter(point);
+    });
+  }
+
+  #sortPoints(points) {
+    const pointsCopy = [...points];
+    switch (this.#currentSortType) {
+      case 'day':
+        return pointsCopy.sort((a, b) => {
+          const dateA = new Date(a.dateFrom);
+          const dateB = new Date(b.dateFrom);
+          return dateA - dateB || a.id - b.id; // Если даты совпадают, сортируем по ID
+        });
+      case 'time':
+        return pointsCopy.sort((a, b) => {
+          const durationA = new Date(a.dateTo) - new Date(a.dateFrom);
+          const durationB = new Date(b.dateTo) - new Date(b.dateFrom);
+          return durationB - durationA; // Сортируем от большего времени к меньшему
+        });
+      case 'price':
+        return pointsCopy.sort((a, b) => b.basePrice - a.basePrice); // Сортируем от большей цены к меньшей
+      default:
+        return pointsCopy;
+    }
+  }
+
+  #handleSortTypeChange = (newSortType) => {
+    if (this.#currentSortType === newSortType) {
+      return; // Не перерисовываем, если тип сортировки не изменился
+    }
+
+    this.#currentSortType = newSortType;
+
+    // Обновляем SortView с новым типом сортировки
+    const newSortComponent = new SortView({
+      currentSortType: this.#currentSortType,
+      disabledSortTypes: ['event', 'offer'],
+      onSortTypeChange: this.#handleSortTypeChange,
+    });
+    replace(newSortComponent, this.#sortComponent);
+    this.#sortComponent = newSortComponent;
+
+    // Перерисовываем точки с новым порядком
+    this.#renderPoints();
+  };
 
   #createPointPresenter(point) {
     const destination = this.#model.getDestinationById(point.destinationId);

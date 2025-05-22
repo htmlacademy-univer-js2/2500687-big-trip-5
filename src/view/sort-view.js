@@ -3,11 +3,15 @@ import AbstractView from '../framework/view/abstract-view.js';
 export default class SortView extends AbstractView {
   #currentSortType = 'day';
   #disabledSortTypes = ['event', 'offer'];
+  #handleSortTypeChange = null;
 
-  constructor({ currentSortType, disabledSortTypes } = {}) {
+  constructor({currentSortType, disabledSortTypes, onSortTypeChange} = {}) {
     super();
     this.#currentSortType = currentSortType || 'day';
     this.#disabledSortTypes = disabledSortTypes || ['event', 'offer'];
+    this.#handleSortTypeChange = onSortTypeChange;
+
+    this.element.addEventListener('click', this.#sortTypeChangeHandler); // Добавляем обработчик клика
   }
 
   get template() {
@@ -30,6 +34,7 @@ export default class SortView extends AbstractView {
               value="sort-${option.type}"
               ${this.#currentSortType === option.type ? 'checked' : ''}
               ${this.#disabledSortTypes.includes(option.type) ? 'disabled' : ''}
+              data-sort-type="${option.type}"
             >
             <label class="trip-sort__btn" for="sort-${option.type}">${option.label}</label>
           </div>
@@ -37,4 +42,16 @@ export default class SortView extends AbstractView {
       </form>
     `;
   }
+
+  #sortTypeChangeHandler = (evt) => {
+    const input = evt.target.closest('input');
+    if (!input || input.disabled) {
+      return;
+    }
+
+    const sortType = input.dataset.sortType;
+    if (sortType && this.#handleSortTypeChange) {
+      this.#handleSortTypeChange(sortType);
+    }
+  };
 }
