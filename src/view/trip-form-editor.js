@@ -1,6 +1,8 @@
-import {formatDateTime} from '../mock/utils';
-//import AbstractView from '../framework/view/abstract-view.js';
+//import {formatDateTime} from '../mock/utils';
+import flatpickr from 'flatpickr';
+import '../../node_modules/flatpickr/dist/flatpickr.min.css';
 import AbstractStatefulView from '../framework/view/abstract-stateful-view.js';
+import dayjs from 'dayjs';
 
 export default class TripFormEdit extends AbstractStatefulView {
   //#point = null;
@@ -8,6 +10,8 @@ export default class TripFormEdit extends AbstractStatefulView {
   #offersByType = {};
   #handleFormSubmit = null;
   #handleRollupClick = null;
+  #flatpickrStart = null; // Экземпляр для даты начала
+  #flatpickrEnd = null; // Экземпляр для даты окончания
 
   constructor(point, destinations, offersByType, onFormSubmit, onRollupClick) {
     super();
@@ -27,12 +31,16 @@ export default class TripFormEdit extends AbstractStatefulView {
 
     // Навешиваем обработчики
     this._restoreHandlers();
+    this.#initFlatpickr(); // Инициализация flatpickr
   }
 
   get template() {
     const { type, destinationId, dateFrom, dateTo, basePrice, offers } = this._state.point;
-    const destination = this.#destinations.find((dest) => dest.id === destinationId) || { name: '', description: '', pictures: [] };
+    const destination = this.#destinations.find((dest) => String(dest.id) === String(destinationId)) || { name: '', description: '', pictures: [] };
     const availableOffers = this.#offersByType[type] || [];
+
+    const formattedDateFrom = dateFrom ? dayjs(dateFrom).format('DD/MM/YY HH:mm') : '';
+    const formattedDateTo = dateTo ? dayjs(dateTo).format('DD/MM/YY HH:mm') : '';
     return `
       <li class="trip-events__item">
         <form class="event event--edit" action="#" method="post">
@@ -59,17 +67,17 @@ export default class TripFormEdit extends AbstractStatefulView {
               <label class="event__label event__type-output" for="event-destination-1">
                 ${type}
               </label>
-              <input class="event__input event__input--destination" id="event-destination-1" type="text" name="event-destination" value="${destination.name}" list="destination-list-1">
+              <input class="event__input event__input--destination" id="event-destination-1" type="text" name="event-destination" value="${destination.name || ''}" list="destination-list-1">
               <datalist id="destination-list-1">
                 ${this.#destinations.map((dest) => `<option value="${dest.name}"></option>`).join('')}
               </datalist>
             </div>
             <div class="event__field-group event__field-group--time">
               <label class="visually-hidden" for="event-start-time-1">From</label>
-              <input class="event__input event__input--time" id="event-start-time-1" type="text" name="event-start-time" value="${dateFrom ? formatDateTime(new Date(dateFrom)) : ''}">
+              <input class="event__input event__input--time" id="event-start-time-1" type="text" name="event-start-time" value="${formattedDateFrom}">
               —
               <label class="visually-hidden" for="event-end-time-1">To</label>
-              <input class="event__input event__input--time" id="event-end-time-1" type="text" name="event-end-time" value="${dateTo ? formatDateTime(new Date(dateTo)) : ''}">
+              <input class="event__input event__input--time" id="event-end-time-1" type="text" name="event-end-time" value="${formattedDateTo}">
             </div>
             <div class="event__field-group event__field-group--price">
               <label class="event__label" for="event-price-1">
@@ -122,6 +130,40 @@ export default class TripFormEdit extends AbstractStatefulView {
         </form>
       </li>
     `;
+  }
+
+  #initFlatpickr() {
+    const startInput = this.element.querySelector('#event-start-time-1');
+    const endInput = this.element.querySelector('#event-end-time-1');
+
+    // Настройки flatpickr
+    const flatpickrOptions = {
+      dateFormat: 'd/m/y H:i', // Формат согласно техзаданию: DD/MM/YY HH:mm
+      enableTime: true, // Включаем выбор времени
+      time24hr: true, // 24-часовой формат
+      defaultDate: this._state.point.dateFrom || this._state.point.dateTo || new Date(), // Устанавливаем начальную дату
+      onChange: (selectedDates, dateStr, instance) => {
+        const field = instance.element.id === 'event-start-time-1' ? 'dateFrom' : 'dateTo';
+        this.updateElement({
+          point: {
+            ...this._state.point,
+            [field]: selectedDates[0] ? selectedDates[0].toISOString() : null,
+          },
+        });
+      },
+    };
+
+    // Инициализация flatpickr
+    this.#flatpickrStart = flatpickr(startInput, flatpickrOptions);
+    this.#flatpickrEnd = flatpickr(endInput, flatpickrOptions);
+
+    // Устанавливаем начальные значения
+    if (this._state.point.dateFrom) {
+      this.#flatpickrStart.setDate(dayjs(this._state.point.dateFrom).toDate());
+    }
+    if (this._state.point.dateTo) {
+      this.#flatpickrEnd.setDate(dayjs(this._state.point.dateTo).toDate());
+    }
   }
 
   _restoreHandlers() {
