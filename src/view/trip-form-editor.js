@@ -1,8 +1,9 @@
 import {formatDateTime} from '../mock/utils';
-import AbstractView from '../framework/view/abstract-view.js';
+//import AbstractView from '../framework/view/abstract-view.js';
+import AbstractStatefulView from '../framework/view/abstract-stateful-view.js';
 
-export default class TripFormEdit extends AbstractView {
-  #point = null;
+export default class TripFormEdit extends AbstractStatefulView {
+  //#point = null;
   #destinations = [];
   #offersByType = {};
   #handleFormSubmit = null;
@@ -10,24 +11,26 @@ export default class TripFormEdit extends AbstractView {
 
   constructor(point, destinations, offersByType, onFormSubmit, onRollupClick) {
     super();
-    this.#point = point;
+    //this.#point = point;
     this.#destinations = destinations;
     this.#offersByType = offersByType;
     this.#handleFormSubmit = onFormSubmit;
     this.#handleRollupClick = onRollupClick;
 
-    // Навешиваем обработчик на отправку формы
-    this.element.querySelector('form.event--edit').addEventListener('submit', this.#formSubmitHandler);
+    // Инициализируем состояние
+    this._state = structuredClone({
+      point: {
+        ...point,
+        offers: point.offers || [], // Убедимся, что offers всегда массив
+      },
+    });
 
-    // Кнопка "Стрелка вверх" в форме редактирования
-    const rollupBtn = this.element.querySelector('.event__rollup-btn');
-    if (rollupBtn) {
-      rollupBtn.addEventListener('click', this.#rollupClickHandler);
-    }
+    // Навешиваем обработчики
+    this._restoreHandlers();
   }
 
   get template() {
-    const { type, destinationId, dateFrom, dateTo, basePrice, offers } = this.#point;
+    const { type, destinationId, dateFrom, dateTo, basePrice, offers } = this._state.point;
     const destination = this.#destinations.find((dest) => dest.id === destinationId) || { name: '', description: '', pictures: [] };
     const availableOffers = this.#offersByType[type] || [];
     return `
@@ -76,8 +79,8 @@ export default class TripFormEdit extends AbstractView {
               <input class="event__input event__input--price" id="event-price-1" type="text" name="event-price" value="${basePrice}">
             </div>
             <button class="event__save-btn btn btn--blue" type="submit">Save</button>
-            <button class="event__reset-btn" type="reset">${this.#point.id ? 'Delete' : 'Cancel'}</button>
-            ${this.#point.id ? `
+            <button class="event__reset-btn" type="reset">${this._state.point.id ? 'Delete' : 'Cancel'}</button>
+            ${this._state.point.id ? `
               <button class="event__rollup-btn" type="button">
                 <span class="visually-hidden">Close event</span>
               </button>
@@ -121,6 +124,23 @@ export default class TripFormEdit extends AbstractView {
     `;
   }
 
+  _restoreHandlers() {
+    // Обработчик отправки формы
+    this.element.querySelector('form.event--edit').addEventListener('submit', this.#formSubmitHandler);
+
+    // Обработчик кнопки "Стрелка вверх"
+    const rollupBtn = this.element.querySelector('.event__rollup-btn');
+    if (rollupBtn) {
+      rollupBtn.addEventListener('click', this.#rollupClickHandler);
+    }
+
+    // Обработчик смены типа точки
+    this.element.querySelector('.event__type-group').addEventListener('change', this.#typeChangeHandler);
+
+    // Обработчик смены пункта назначения
+    this.element.querySelector('.event__input--destination').addEventListener('change', this.#destinationChangeHandler);
+  }
+
   #formSubmitHandler = (evt) => {
     evt.preventDefault();
     this.#handleFormSubmit();
@@ -130,5 +150,31 @@ export default class TripFormEdit extends AbstractView {
     evt.preventDefault();
     evt.stopPropagation();
     this.#handleRollupClick();
+  };
+
+  #typeChangeHandler = (evt) => {
+    let newType = evt.target.value; // Получаем значение, например, "taxi"
+    // Приводим к формату с заглавной буквы
+    newType = newType.charAt(0).toUpperCase() + newType.slice(1).toLowerCase();
+    this.updateElement({
+      point: {
+        ...this._state.point,
+        type: newType,
+        offers: [], // Сбрасываем выбранные опции при смене типа
+      },
+    });
+  };
+
+  #destinationChangeHandler = (evt) => {
+    const newDestinationName = evt.target.value;
+    const newDestination = this.#destinations.find((dest) => dest.name === newDestinationName);
+    if (newDestination) {
+      this.updateElement({
+        point: {
+          ...this._state.point,
+          destinationId: newDestination.id,
+        },
+      });
+    }
   };
 }
