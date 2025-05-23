@@ -31,7 +31,13 @@ export default class TripPresenter {
       onSortTypeChange: this.#handleSortTypeChange, // Передаём колбэк
     });
 
-    this.tripFormCreate = new TripFormCreate(this.#model.destinations, this.#model.offersByType);
+    this.tripFormCreate = new TripFormCreate(
+      this.#model.destinations,
+      this.#model.offersByType,
+      this.#handleNewPointSubmit, // Добавляем обработчик отправки формы
+      this.#handleNewPointCancel // Добавляем обработчик отмены
+    );
+
     this.#emptyListComponent = new EmptyListView(this.#currentFilterType);
   }
 
@@ -194,5 +200,13 @@ export default class TripPresenter {
       replace(newEmptyListComponent, this.#emptyListComponent);
       this.#emptyListComponent = newEmptyListComponent;
     }
+  };
+
+  #handleNewPointSubmit = () => {
+
+  };
+
+  #handleNewPointCancel = () => {
+
   };
 }
