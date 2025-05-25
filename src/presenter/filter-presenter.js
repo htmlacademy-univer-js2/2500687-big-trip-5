@@ -22,7 +22,6 @@ export default class FilterPresenter {
   }
 
   #handleFilterChange(filterType) {
-    console.log('Filter changed to:', filterType);
     this.#filterModel.setFilter(filterType);
 
     // Перерендерим FiltersView с новыми данными
