@@ -6,7 +6,7 @@ export const generateTripPoint = (id, offersByType) => {
   const type = getRandomArrayElement(TYPES);
 
   const dateFrom = new Date();
-  dateFrom.setDate(dateFrom.getDate() + getRandomInt(1, 5));
+  dateFrom.setDate(dateFrom.getDate() + getRandomInt(-5, 5));
   dateFrom.setHours(getRandomInt(0, 23), getRandomInt(0, 59));
   const dateTo = new Date(dateFrom);
   dateTo.setHours(dateTo.getHours() + getRandomInt(1, 48));
