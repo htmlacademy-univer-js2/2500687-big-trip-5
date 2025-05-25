@@ -1,29 +1,31 @@
-import FiltersView from '../view/filters-view.js';
 import SortView from '../view/sort-view.js';
 import TripFormCreate from '../view/trip-form-creation.js';
 import TripListView from '../view/trip-list-view.js';
 import EmptyListView from '../view/empty-list-view.js';
 import PointPresenter from './point-presenter.js';
-import {render, replace} from '../framework/render.js';
+import {render, replace, remove} from '../framework/render.js';
+
+const ActionType = {
+  UPDATE: 'UPDATE',
+  DELETE: 'DELETE',
+  ADD: 'ADD',
+};
 
 export default class TripPresenter {
   #model = null;
+  #filterModel = null;
   #tripListComponent = new TripListView();
   #pointPresenters = new Map(); // Для хранения пар TripPoint и TripFormEdit
   #currentEditingPointId = null; // Для отслеживания открытой формы
   #currentFilterType = 'everything'; // Текущий фильтр
   #currentSortType = 'day'; // Текущий тип сортировки
-  #filtersComponent = null;
   #emptyListComponent = null;
   #sortComponent = null;
 
-  constructor(model) {
+  constructor({model, filterModel}) {
     this.#model = model;
-    this.#filtersComponent = new FiltersView(
-      this.#model.points,
-      this.#currentFilterType,
-      this.#handleFilterChange
-    );
+    this.#filterModel = filterModel;
+    this.#currentFilterType = this.#filterModel.getFilter();
 
     this.#sortComponent = new SortView({
       currentSortType: this.#currentSortType,
@@ -39,14 +41,14 @@ export default class TripPresenter {
     );
 
     this.#emptyListComponent = new EmptyListView(this.#currentFilterType);
+
+    // Подписываемся на изменения в моделях
+    this.#filterModel.addObserver(this.#handleModelEvent.bind(this));
+    this.#model.addObserver(this.#handleModelEvent.bind(this));
   }
 
   init() {
-    const filtersContainer = document.querySelector('.trip-controls__filters');
     const tripEventsContainer = document.querySelector('.trip-events');
-
-    // Отрисовка фильтров
-    render(this.#filtersComponent, filtersContainer);
 
     //Отрисовка сортировки
     render(this.#sortComponent, tripEventsContainer);
@@ -54,28 +56,37 @@ export default class TripPresenter {
     render(this.#tripListComponent, tripEventsContainer);
 
     // Отрисовка контента
-    if (this.#model.points.length === 0) {
-      render(this.#emptyListComponent, this.#tripListComponent.element);
-    } else {
-      this.#renderPoints();
-    }
-
-    // Форма создания
-    render(this.tripFormCreate, tripEventsContainer);
+    this.#renderTrip();
 
     document.addEventListener('keydown', this.#handleEscKeyDown);
+
+    const newEventButton = document.querySelector('.trip-main__event-add-btn');
+    newEventButton.addEventListener('click', this.#handleNewEventClick);
   }
 
-  #renderPoints() {
+  #renderTrip() {
     // Очищаем текущие презентеры
     this.#pointPresenters.forEach((presenter) => presenter.destroy());
     this.#pointPresenters.clear();
 
-    // Сортируем точки
-    const sortedPoints = this.#sortPoints(this.#model.points);
+    // Удаляем старую заглушку, если она есть
+    if (this.#emptyListComponent) {
+      remove(this.#emptyListComponent);
+      this.#emptyListComponent = null;
+    }
 
-    // Отрисовываем точки в отсортированном порядке
-    sortedPoints.forEach((point) => {
+    // Получаем отфильтрованные точки
+    const points = this.#sortPoints(this.#model.points);
+
+    // Если точек нет, показываем заглушку
+    if (points.length === 0) {
+      this.#emptyListComponent = new EmptyListView(this.#currentFilterType);
+      render(this.#emptyListComponent, this.#tripListComponent.element);
+      return;
+    }
+
+    // Отрисовываем точки
+    points.forEach((point) => {
       this.#createPointPresenter(point);
     });
   }
@@ -119,7 +130,7 @@ export default class TripPresenter {
     this.#sortComponent = newSortComponent;
 
     // Перерисовываем точки с новым порядком
-    this.#renderPoints();
+    this.#renderTrip();
   };
 
   #createPointPresenter(point) {
@@ -140,41 +151,54 @@ export default class TripPresenter {
     this.#pointPresenters.set(point.id, pointPresenter);
   }
 
-  #handlePointChange = (updatedPoint) => {
-    const pointPresenter = this.#pointPresenters.get(updatedPoint.id);
-    const previousSibling = pointPresenter.element?.previousElementSibling; // Сохраняем предыдущий элемент
-
-    this.#model.updatePoint(updatedPoint.id, updatedPoint);
-    pointPresenter.destroy();
-    this.#pointPresenters.delete(updatedPoint.id);
-
-    // Создаём новый презентер
-    this.#createPointPresenter(updatedPoint);
-
-    // Вставляем точку на прежнее место
-    const newPresenter = this.#pointPresenters.get(updatedPoint.id);
-    if (previousSibling) {
-      this.#tripListComponent.element.insertBefore(newPresenter.element, previousSibling.nextSibling);
-    } else {
-      this.#tripListComponent.element.prepend(newPresenter.element); // Если это была первая точка
+  #handlePointChange = (actionType, updatedPoint) => {
+    switch (actionType) {
+      case ActionType.UPDATE:
+        this.#model.updatePoint(updatedPoint.id, updatedPoint);
+        break;
+      case ActionType.DELETE:
+        this.#model.deletePoint(updatedPoint.id);
+        break;
+      case ActionType.ADD:
+        this.#model.addPoint(updatedPoint);
+        break;
     }
   };
 
   #notifyPointEditStarted = (pointId) => {
-    // Если уже есть открытая форма, закрываем её
-    if (this.#currentEditingPointId && this.#currentEditingPointId !== pointId) {
-      const previousPresenter = this.#pointPresenters.get(this.#currentEditingPointId);
-      if (previousPresenter) {
-        previousPresenter.resetView();
-      }
+    const newEventButton = document.querySelector('.trip-main__event-add-btn');
+    if (newEventButton) {
+      newEventButton.disabled = false;
     }
 
-    // Открываем форму для текущей точки
+    // Закрываем форму создания, если она открыта
+    if (this.tripFormCreate.element && this.tripFormCreate.element.parentElement) {
+      this.tripFormCreate.element.remove();
+      // Пересоздаём форму создания, чтобы сбросить её состояние
+      this.tripFormCreate = new TripFormCreate(
+        this.#model.destinations,
+        this.#model.offersByType,
+        this.#handleNewPointSubmit,
+        this.#handleNewPointCancel
+      );
+    }
+
+    // Закрываем все формы редактирования
+    this.#pointPresenters.forEach((presenter) => {
+      //if (id !== pointId && presenter.isEditing) {
+      presenter.resetFormToInitialState();
+      presenter.resetView();
+      //}
+    });
+
+    // Открываем новую форму редактирования
     const currentPresenter = this.#pointPresenters.get(pointId);
     if (currentPresenter) {
       currentPresenter.switchToEditMode();
+      this.#currentEditingPointId = pointId;
+    } else {
+      this.#currentEditingPointId = null;
     }
-    this.#currentEditingPointId = pointId;
   };
 
   #handleEscKeyDown = (evt) => {
@@ -187,26 +211,96 @@ export default class TripPresenter {
         }
         this.#currentEditingPointId = null;
       }
+      remove(this.tripFormCreate);
+      document.querySelector('.trip-main__event-add-btn').disabled = false;
     }
   };
 
-  #handleFilterChange = (newFilterType) => {
-    this.#currentFilterType = newFilterType;
+  #handleModelEvent = () => {
+    this.#currentFilterType = this.#filterModel.getFilter();
+    //this.#currentSortType = 'day';
 
-    // Обновляем EmptyListView, если список пуст
-    if (this.#model.points.length === 0) {
+    const newSortComponent = new SortView({
+      currentSortType: this.#currentSortType,
+      disabledSortTypes: ['event', 'offer'],
+      onSortTypeChange: this.#handleSortTypeChange.bind(this),
+    });
+    replace(newSortComponent, this.#sortComponent);
+    this.#sortComponent = newSortComponent;
 
-      const newEmptyListComponent = new EmptyListView(this.#currentFilterType);
-      replace(newEmptyListComponent, this.#emptyListComponent);
-      this.#emptyListComponent = newEmptyListComponent;
+    this.#renderTrip();
+  };
+
+  #handleNewEventClick = () => {
+  // Сбрасываем фильтры и сортировку
+    this.#currentFilterType = 'everything';
+    this.#currentSortType = 'day';
+    this.#filterModel.setFilter(this.#currentFilterType);
+
+    // Закрываем все открытые формы редактирования
+    if (this.#currentEditingPointId) {
+      const previousPresenter = this.#pointPresenters.get(this.#currentEditingPointId);
+      if (previousPresenter) {
+        previousPresenter.resetFormToInitialState();
+        previousPresenter.resetView();
+      }
+      this.#currentEditingPointId = null;
+    }
+
+    // Удаляем и пересоздаём форму создания
+    if (this.tripFormCreate.element && this.tripFormCreate.element.parentElement) {
+      this.tripFormCreate.element.remove();
+    }
+    this.tripFormCreate = new TripFormCreate(
+      this.#model.destinations,
+      this.#model.offersByType,
+      this.#handleNewPointSubmit,
+      this.#handleNewPointCancel
+    );
+
+    // Блокируем кнопку "New Event"
+    const newEventButton = document.querySelector('.trip-main__event-add-btn');
+    if (newEventButton) {
+      newEventButton.disabled = true;
+    }
+
+    // Добавляем форму создания в начало списка
+    const tripList = document.querySelector('.trip-events__list');
+    if (tripList) {
+      render(this.tripFormCreate, tripList, 'afterbegin');
+    } else {
+      render(this.tripFormCreate, document.querySelector('.trip-events'));
     }
   };
 
-  #handleNewPointSubmit = () => {
-
+  #handleNewPointSubmit = (newPoint) => {
+    this.#handlePointChange(ActionType.ADD, newPoint);
+    this.tripFormCreate.element.remove();
+    this.tripFormCreate = new TripFormCreate(
+      this.#model.destinations,
+      this.#model.offersByType,
+      this.#handleNewPointSubmit,
+      this.#handleNewPointCancel
+    );
+    const newEventButton = document.querySelector('.trip-main__event-add-btn');
+    if (newEventButton) {
+      newEventButton.disabled = false;
+    }
+    this.#currentEditingPointId = null; // Сбрасываем текущую редактируемую точку
   };
 
   #handleNewPointCancel = () => {
-
+    this.tripFormCreate.element.remove();
+    this.tripFormCreate = new TripFormCreate(
+      this.#model.destinations,
+      this.#model.offersByType,
+      this.#handleNewPointSubmit,
+      this.#handleNewPointCancel
+    );
+    const newEventButton = document.querySelector('.trip-main__event-add-btn');
+    if (newEventButton) {
+      newEventButton.disabled = false;
+    }
+    this.#currentEditingPointId = null; // Сбрасываем текущую редактируемую точку
   };
 }

@@ -10,6 +10,7 @@ export default class TripFormCreate extends AbstractStatefulView {
   #handleCancelClick = null;
   #flatpickrStart = null; // Экземпляр для даты начала
   #flatpickrEnd = null; // Экземпляр для даты окончания
+  #previousDestinationName = '';
 
   constructor(destinations, offersByType, onFormSubmit, onCancelClick) {
     super();
@@ -90,7 +91,7 @@ export default class TripFormCreate extends AbstractStatefulView {
                 <span class="visually-hidden">Price</span>
                 €
               </label>
-              <input class="event__input event__input--price" id="event-price-1" type="text" name="event-price" value="${basePrice}">
+              <input class="event__input event__input--price" id="event-price-1" type="number" min="0" step="1" name="event-price" value="${basePrice}" required>
             </div>
             <button class="event__save-btn btn btn--blue" type="submit">Save</button>
             <button class="event__reset-btn" type="reset">Cancel</button>
@@ -135,34 +136,32 @@ export default class TripFormCreate extends AbstractStatefulView {
     const startInput = this.element.querySelector('#event-start-time-1');
     const endInput = this.element.querySelector('#event-end-time-1');
 
-    // Настройки flatpickr
     const flatpickrOptions = {
-      dateFormat: 'd/m/y H:i', // Формат согласно техзаданию: DD/MM/YY HH:mm
-      enableTime: true, // Включаем выбор времени
-      time24hr: true, // 24-часовой формат
-      defaultDate: this._state.point.dateFrom || this._state.point.dateTo || new Date(), // Устанавливаем начальную дату
-      minDate: 'today', // Ограничиваем выбор с сегодняшнего дня
+      dateFormat: 'd/m/y H:i',
+      enableTime: true,
+      time24hr: true,
+      defaultDate: this._state.point.dateFrom || this._state.point.dateTo || new Date(),
       onChange: (selectedDates, dateStr, instance) => {
         const field = instance.element.id === 'event-start-time-1' ? 'dateFrom' : 'dateTo';
-        this.updateElement({
+        this._setState({
           point: {
             ...this._state.point,
             [field]: selectedDates[0] ? selectedDates[0].toISOString() : null,
           },
         });
-
-        // Синхронизация: если выбрана новая дата начала, обновляем минимальную дату для конца
-        if (field === 'dateFrom' && this.#flatpickrEnd) {
-          this.#flatpickrEnd.set('minDate', selectedDates[0]);
-        }
       },
     };
 
-    // Инициализация flatpickr
-    this.#flatpickrStart = flatpickr(startInput, flatpickrOptions);
-    this.#flatpickrEnd = flatpickr(endInput, { ...flatpickrOptions, minDate: this._state.point.dateFrom || 'today' });
+    if (this.#flatpickrStart) {
+      this.#flatpickrStart.destroy();
+    }
+    if (this.#flatpickrEnd) {
+      this.#flatpickrEnd.destroy();
+    }
 
-    // Устанавливаем начальные значения
+    this.#flatpickrStart = flatpickr(startInput, flatpickrOptions);
+    this.#flatpickrEnd = flatpickr(endInput, flatpickrOptions);
+
     if (this._state.point.dateFrom) {
       this.#flatpickrStart.setDate(dayjs(this._state.point.dateFrom).toDate());
     }
@@ -182,18 +181,55 @@ export default class TripFormCreate extends AbstractStatefulView {
     this.element.querySelector('.event__type-group').addEventListener('change', this.#typeChangeHandler);
 
     // Обработчик смены пункта назначения
-    this.element.querySelector('.event__input--destination').addEventListener('change', this.#destinationChangeHandler);
+    const destinationInput = this.element.querySelector('.event__input--destination');
+    destinationInput.addEventListener('input', this.#destinationInputHandler);
+    destinationInput.addEventListener('change', this.#destinationChangeHandler);
+    destinationInput.addEventListener('focus', this.#destinationFocusHandler);
+    destinationInput.addEventListener('blur', this.#destinationBlurHandler);
+
+    this.element.addEventListener('keydown', this.#escKeyDownHandler);
   }
 
   #formSubmitHandler = (evt) => {
     evt.preventDefault();
-    this.#handleFormSubmit();
+    const newPoint = this.#getNewPoint();
+    this.#handleFormSubmit(newPoint);
   };
 
   #cancelClickHandler = (evt) => {
     evt.preventDefault();
     this.#handleCancelClick();
   };
+
+  #escKeyDownHandler = (evt) => {
+    if (evt.key === 'Escape' || evt.key === 'Esc') {
+      evt.preventDefault();
+      this.#handleCancelClick();
+    }
+  };
+
+  #getNewPoint() {
+    const form = this.element.querySelector('form.event--edit');
+    const formData = new FormData(form);
+
+    const type = formData.get('event-type') || this._state.point.type;
+    const destinationName = formData.get('event-destination');
+    const destination = this.#destinations.find((dest) => dest.name === destinationName);
+    const offers = Array.from(formData.entries())
+      .filter(([key]) => key.startsWith('event-offer-'))
+      .map(([key]) => key.replace('event-offer-', ''));
+
+    return {
+      id: `temp-${Date.now()}`, // Временный ID, в реальном приложении будет с сервера
+      type: type.charAt(0).toUpperCase() + type.slice(1).toLowerCase(),
+      destinationId: destination?.id || this._state.point.destinationId,
+      dateFrom: this._state.point.dateFrom,
+      dateTo: this._state.point.dateTo,
+      basePrice: parseInt(formData.get('event-price'), 10) || 0,
+      offers,
+      isFavorite: false,
+    };
+  }
 
   #typeChangeHandler = (evt) => {
     const newTypeLower = evt.target.value.toLowerCase();
@@ -208,16 +244,57 @@ export default class TripFormCreate extends AbstractStatefulView {
         offers: [], // Сбрасываем выбранные опции при смене типа
       },
     });
+    this.#resetFlatpickr();
+    this.#initFlatpickr();
   };
 
   #destinationChangeHandler = (evt) => {
     const newDestinationName = evt.target.value;
     const newDestination = this.#destinations.find((dest) => dest.name === newDestinationName);
-    this.updateElement({
-      point: {
-        ...this._state.point,
-        destinationId: newDestination.id,
-      },
-    });
+    if (newDestination) {
+      this.updateElement({
+        point: {
+          ...this._state.point,
+          destinationId: newDestination.id,
+        },
+      });
+      this.#previousDestinationName = newDestinationName; // Обновляем предыдущее значение
+    } else {
+      evt.target.value = this.#previousDestinationName || '';
+    }
+    this.#resetFlatpickr();
+    this.#initFlatpickr();
   };
+
+  #destinationFocusHandler = (evt) => {
+    this.#previousDestinationName = evt.target.value;
+    evt.target.value = ''; // Очищаем поле, чтобы показать полный список
+  };
+
+  #destinationBlurHandler = (evt) => {
+    const inputValue = evt.target.value;
+    const validDestination = this.#destinations.find((dest) => dest.name === inputValue);
+    if (!validDestination) {
+      evt.target.value = this.#previousDestinationName; // Восстанавливаем предыдущее значение
+    }
+  };
+
+  #destinationInputHandler = (evt) => {
+    const inputValue = evt.target.value;
+    const validDestination = this.#destinations.find((dest) => dest.name === inputValue);
+    if (!validDestination && inputValue !== '') {
+      evt.target.value = this.#previousDestinationName || '';
+    }
+  };
+
+  #resetFlatpickr() {
+    if (this.#flatpickrStart) {
+      this.#flatpickrStart.destroy();
+    }
+    if (this.#flatpickrEnd) {
+      this.#flatpickrEnd.destroy();
+    }
+    this.#flatpickrStart = null;
+    this.#flatpickrEnd = null;
+  }
 }

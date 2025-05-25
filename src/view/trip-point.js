@@ -57,7 +57,7 @@ export default class TripPoint extends AbstractView {
           <div class="event__type">
             <img class="event__type-icon" width="42" height="42" src="img/icons/${type.toLowerCase()}.png" alt="Event type icon">
           </div>
-          <h3 class="event__title">${type} to ${destinationName}</h3>
+          <h3 class="event__title">${type} ${destinationName}</h3>
           <div class="event__schedule">
             <p class="event__time">
               <time class="event__start-time" datetime="${dateFrom}">${startTime}</time>

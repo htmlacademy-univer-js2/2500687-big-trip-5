@@ -2,6 +2,12 @@ import TripPoint from '../view/trip-point.js';
 import TripFormEdit from '../view/trip-form-editor.js';
 import { render, replace } from '../framework/render.js';
 
+const ActionType = {
+  UPDATE: 'UPDATE',
+  DELETE: 'DELETE',
+  ADD: 'ADD',
+};
+
 export default class PointPresenter {
   #point = null;
   #destinations = [];
@@ -32,7 +38,8 @@ export default class PointPresenter {
       this.#destinations, // Передаём весь массив destinations
       this.#offersByType, // Передаём весь объект offersByType
       this.#handleFormSubmit,
-      this.#handleRollupClick
+      this.#handleRollupClick,
+      this.#handleDeleteClick
     );
 
     this.#renderPoint();
@@ -47,9 +54,18 @@ export default class PointPresenter {
   }
 
   resetView() {
-    if (this.#isEditing && this.#pointEditComponent.element.parentElement) {
-      replace(this.#pointComponent, this.#pointEditComponent);
+    if (this.#isEditing) {
+      this.#pointEditComponent.resetToInitialState();
+      if (this.#pointEditComponent.element && this.#pointEditComponent.element.parentElement) {
+        replace(this.#pointComponent, this.#pointEditComponent);
+      }
       this.#isEditing = false;
+    }
+  }
+
+  resetFormToInitialState() {
+    if (this.#pointEditComponent) {
+      this.#pointEditComponent.resetToInitialState();
     }
   }
 
@@ -64,9 +80,10 @@ export default class PointPresenter {
     this.#onEditStart(this.#point.id); // Уведомляем TripPresenter
   };
 
-  #handleFormSubmit = () => {
-    replace(this.#pointComponent, this.#pointEditComponent);
-    this.#isEditing = false;
+  #handleFormSubmit = (updatedPoint) => {
+    this.#onDataChange(ActionType.UPDATE, updatedPoint);
+    this.resetView();
+    this.#onEditStart(null); // Сбрасываем текущую редактируемую точку
   };
 
   #handleRollupClick = () => {
@@ -74,10 +91,16 @@ export default class PointPresenter {
     this.#isEditing = false;
   };
 
+  #handleDeleteClick = () => {
+    this.#onDataChange(ActionType.DELETE, this.#point);
+    this.destroy();
+    this.#onEditStart(null); // Сбрасываем текущую редактируемую точку
+  };
+
   #handleFavoriteClick = (evt) => {
     evt.preventDefault();
     const updatedPoint = { ...this.#point, isFavorite: !this.#point.isFavorite };
-    this.#onDataChange(updatedPoint);
+    this.#onDataChange(ActionType.UPDATE, updatedPoint);
   };
 
   destroy() {
