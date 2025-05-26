@@ -12,7 +12,6 @@ export default class TripService extends ApiService {
   async getPoints() {
     const response = await this._load({ url: 'points' });
     const points = await ApiService.parseResponse(response);
-    console.log(`Received ${points.length} points from server`, points);
     return points.map(this.#adaptPointToClient);
   }
 
@@ -20,10 +19,8 @@ export default class TripService extends ApiService {
     try {
       const response = await this._load({ url: 'destinations' });
       const destinations = await ApiService.parseResponse(response);
-      console.log(`TripService: Received ${destinations.length} destinations from server`, destinations);
       return destinations;
     } catch (error) {
-      console.error('TripService: Failed to fetch destinations', error);
       return [];
     }
   }
@@ -32,7 +29,6 @@ export default class TripService extends ApiService {
     try {
       const response = await this._load({ url: 'offers' });
       const allOffers = await ApiService.parseResponse(response);
-      console.log('Received offers from server', allOffers);
       return allOffers.reduce((acc, { type, offers }) => ({
         ...acc,
         [type.toLowerCase()]: offers,
@@ -43,22 +39,15 @@ export default class TripService extends ApiService {
   }
 
   async updatePoint(point) {
-    try {
-      const serverPoint = this.#adaptPointToServer(point);
-      console.log(`TripService: Sending PUT request to /points/${point.id}`, serverPoint);
-      const response = await this._load({
-        url: `points/${point.id}`,
-        method: 'PUT',
-        body: JSON.stringify(serverPoint),
-        headers: new Headers({ 'Content-Type': 'application/json' }),
-      });
-      const updatedPoint = await ApiService.parseResponse(response);
-      console.log('TripService: Point updated', updatedPoint);
-      return this.#adaptPointToClient(updatedPoint);
-    } catch (error) {
-      console.error('TripService: Failed to update point', error);
-      throw error;
-    }
+    const serverPoint = this.#adaptPointToServer(point);
+    const response = await this._load({
+      url: `points/${point.id}`,
+      method: 'PUT',
+      body: JSON.stringify(serverPoint),
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+    });
+    const updatedPoint = await ApiService.parseResponse(response);
+    return this.#adaptPointToClient(updatedPoint);
   }
 
   #adaptPointToClient(serverPoint) {
