@@ -22,6 +22,7 @@ export default class TripPresenter {
   #emptyListComponent = null;
   #sortComponent = null;
 
+
   constructor({model, filterModel}) {
     this.#model = model;
     this.#filterModel = filterModel;
@@ -41,7 +42,6 @@ export default class TripPresenter {
     );
 
     this.#emptyListComponent = new EmptyListView(this.#currentFilterType);
-
     // Подписываемся на изменения в моделях
     this.#filterModel.addObserver(this.#handleModelEvent.bind(this));
     this.#model.addObserver(this.#handleModelEvent.bind(this));
@@ -151,13 +151,13 @@ export default class TripPresenter {
     this.#pointPresenters.set(point.id, pointPresenter);
   }
 
-  #handlePointChange = (actionType, updatedPoint) => {
+  #handlePointChange = async (actionType, updatedPoint) => {
     switch (actionType) {
       case ActionType.UPDATE:
         this.#model.updatePoint(updatedPoint.id, updatedPoint);
         break;
       case ActionType.DELETE:
-        this.#model.deletePoint(updatedPoint.id);
+        await this.#model.deletePoint(updatedPoint.id);
         break;
       case ActionType.ADD:
         this.#model.addPoint(updatedPoint);

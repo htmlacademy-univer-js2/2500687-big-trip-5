@@ -95,18 +95,40 @@ export default class TripModel extends Observable {
     this.#notifyObservers();
   }
 
-  deletePoint(id) {
-    const index = this.#points.findIndex((point) => point.id === id);
-    if (index !== -1) {
-      this.#points.splice(index, 1);
-      this.#notifyObservers(); // Уведомляем наблюдателей об изменении
+  async addPoint(point) {
+    if (!point || !point.type || !point.destinationId || !point.dateFrom || !point.dateTo) {
+      throw new Error('Invalid point data');
     }
+    const newPoint = await this.#tripService.addPoint(point);
+    this.#points.push(newPoint);
+    this._notify('ADD', newPoint);
   }
 
-  addPoint(newPoint) {
-    this.#points.push(newPoint);
-    this.#notifyObservers(); // Уведомляем наблюдателей об изменении
+  async deletePoint(pointId) {
+    if (!pointId) {
+      throw new Error('Invalid point ID');
+    }
+    await this.#tripService.deletePoint(pointId);
+    const index = this.#points.findIndex((point) => point.id === pointId);
+    if (index === -1) {
+      throw new Error('Point not found');
+    }
+    this.#points.splice(index, 1);
+    this._notify('DELETE', { id: pointId });
   }
+
+  // deletePoint(id) {
+  //   const index = this.#points.findIndex((point) => point.id === id);
+  //   if (index !== -1) {
+  //     this.#points.splice(index, 1);
+  //     this.#notifyObservers(); // Уведомляем наблюдателей об изменении
+  //   }
+  // }
+
+  // addPoint(newPoint) {
+  //   this.#points.push(newPoint);
+  //   this.#notifyObservers(); // Уведомляем наблюдателей об изменении
+  // }
 
   // Паттерн наблюдателя
   addObserver(observer) {
