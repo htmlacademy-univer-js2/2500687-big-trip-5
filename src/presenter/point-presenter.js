@@ -1,6 +1,7 @@
 import TripPoint from '../view/trip-point.js';
 import TripFormEdit from '../view/trip-form-editor.js';
 import { render, replace } from '../framework/render.js';
+import UiBlocker from '../framework/ui-blocker/ui-blocker.js';
 
 const ActionType = {
   UPDATE: 'UPDATE',
@@ -18,6 +19,7 @@ export default class PointPresenter {
   #onDataChange = null;
   #onEditStart = null; // Колбэк для уведомления TripPresenter
   #isEditing = false; // Флаг для отслеживания режима
+  #uiBlocker = null;
 
   constructor({point, destination, offers, destinations, offersByType, tripListComponent, onDataChange, onEditStart}) {
     this.#point = point;
@@ -41,6 +43,10 @@ export default class PointPresenter {
       this.#handleRollupClick,
       this.#handleDeleteClick
     );
+    this.#uiBlocker = new UiBlocker({
+      lowerLimit: 300,
+      upperLimit: 1000,
+    });
 
     this.#renderPoint();
   }
@@ -80,10 +86,19 @@ export default class PointPresenter {
     this.#onEditStart(this.#point.id); // Уведомляем TripPresenter
   };
 
-  #handleFormSubmit = (updatedPoint) => {
-    this.#onDataChange(ActionType.UPDATE, updatedPoint);
-    this.resetView();
-    this.#onEditStart(null); // Сбрасываем текущую редактируемую точку
+  #handleFormSubmit = async (updatedPoint) => {
+    this.#uiBlocker.block();
+    this.#pointEditComponent.startLoading({ isSaving: true });
+    try {
+      await this.#onDataChange(ActionType.UPDATE, updatedPoint);
+      this.#pointEditComponent.stopLoading();
+      this.#uiBlocker.unblock();
+      this.resetView();
+    } catch (error) {
+      this.#pointEditComponent.stopLoading();
+      this.#uiBlocker.unblock();
+      this.#pointEditComponent.shake();
+    }
   };
 
   #handleRollupClick = () => {
@@ -91,10 +106,25 @@ export default class PointPresenter {
     this.#isEditing = false;
   };
 
-  #handleDeleteClick = () => {
-    this.#onDataChange(ActionType.DELETE, this.#point);
-    this.destroy();
-    this.#onEditStart(null); // Сбрасываем текущую редактируемую точку
+  #handleDeleteClick = async () => {
+    this.#uiBlocker.block();
+    if (!this.#pointEditComponent) {
+      this.#uiBlocker.unblock();
+      return;
+    }
+    this.#pointEditComponent.startLoading({ isDeleting: true });
+    try {
+      await this.#onDataChange(ActionType.DELETE, this.#point);
+      this.#uiBlocker.unblock();
+      this.#onEditStart(null);
+      this.destroy();
+    } catch (error) {
+      if (this.#pointEditComponent) {
+        this.#pointEditComponent.stopLoading();
+        this.#pointEditComponent.shake();
+      }
+      this.#uiBlocker.unblock();
+    }
   };
 
   #handleFavoriteClick = (evt) => {

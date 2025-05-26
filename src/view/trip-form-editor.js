@@ -13,6 +13,9 @@ export default class TripFormEdit extends AbstractStatefulView {
   #flatpickrEnd = null; // Экземпляр для даты окончания
   #initialState = null;
   #previousDestinationName = '';
+  #isLoading = false;
+  #isSaving = false;
+  #isDeleting = false;
 
   constructor(point, destinations, offersByType, onFormSubmit, onRollupClick, onDeleteClick) {
     super();
@@ -97,8 +100,12 @@ export default class TripFormEdit extends AbstractStatefulView {
               </label>
               <input class="event__input event__input--price" id="event-price-1" type="number" min="0" step="1" name="event-price" value="${basePrice}" required>
             </div>
-            <button class="event__save-btn btn btn--blue" type="submit">Save</button>
-            <button class="event__reset-btn" type="reset">${this._state.point.id ? 'Delete' : 'Cancel'}</button>
+            <button class="event__save-btn btn btn--blue" type="submit">
+              ${this.#isSaving ? 'Saving...' : 'Save'}
+            </button>
+            <button class="event__reset-btn" type="reset">
+              ${this.#isDeleting ? 'Deleting...' : 'Delete'}
+            </button>
             ${this._state.point.id ? `
               <button class="event__rollup-btn" type="button">
                 <span class="visually-hidden">Close event</span>
@@ -310,6 +317,24 @@ export default class TripFormEdit extends AbstractStatefulView {
     };
 
     return updatedPoint;
+  }
+
+  startLoading({ isSaving = false, isDeleting = false }) {
+    this.#isSaving = isSaving;
+    this.#isDeleting = isDeleting;
+  }
+
+  stopLoading() {
+    this.#isSaving = false;
+    this.#isDeleting = false;
+    this.updateElement(this._state);
+  }
+
+  shake() {
+    this.element.querySelector('form.event--edit').classList.add('shake');
+    setTimeout(() => {
+      this.element.querySelector('form.event--edit').classList.remove('shake');
+    }, 600);
   }
 
   #resetFlatpickr() {
