@@ -1,8 +1,19 @@
+import TripService from '../api.js';
+
 export default class DestinationsModel {
   #destinations = [];
+  #tripService = null;
 
-  constructor(destinations) {
-    this.#destinations = destinations || [];
+  constructor() {
+    this.#tripService = new TripService();
+  }
+
+  async init() {
+    try {
+      this.#destinations = await this.#tripService.getDestinations();
+    } catch (error) {
+      this.#destinations = [];
+    }
   }
 
   getDestinations() {
@@ -14,6 +25,6 @@ export default class DestinationsModel {
   }
 
   getDestinationById(id) {
-    return this.#destinations.find((dest) => String(dest.id) === String(id)) || null;
+    return this.#destinations.find((dest) => String(dest.id) === String(id)) || { name: '', description: '', pictures: [] };
   }
 }
