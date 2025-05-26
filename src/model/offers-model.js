@@ -1,8 +1,19 @@
+import TripService from '../api.js';
+
 export default class OffersModel {
   #offersByType = {};
+  #tripService = null;
 
-  constructor(offersByType) {
-    this.#offersByType = offersByType || {};
+  constructor() {
+    this.#tripService = new TripService();
+  }
+
+  async init() {
+    try {
+      this.#offersByType = await this.#tripService.getOffers();
+    } catch (error) {
+      this.#offersByType = {};
+    }
   }
 
   getOffersByType() {
@@ -14,6 +25,6 @@ export default class OffersModel {
   }
 
   getOffersForType(type) {
-    return this.#offersByType[type] || [];
+    return this.#offersByType[type.toLowerCase()] || [];
   }
 }

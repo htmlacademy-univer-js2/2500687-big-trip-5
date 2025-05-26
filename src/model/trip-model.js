@@ -1,21 +1,42 @@
+import Observable from '../framework/observable.js';
+import TripService from '../api.js';
 import DestinationsModel from './destinations-model.js';
 import OffersModel from './offers-model.js';
 import {isFuturePoint, isPresentPoint, isPastPoint} from '../mock/utils.js';
 import dayjs from 'dayjs';
 
-export default class TripModel {
+export default class TripModel extends Observable {
+  #tripService = null;
   #points = [];
   #destinationsModel = null;
   #offersModel = null;
   #filterModel = null;
   #observers = [];
 
-  constructor(data, filterModel) {
-    this.#points = data.points;
-    this.#destinationsModel = new DestinationsModel(data.destinations);
-    this.#offersModel = new OffersModel(data.offersByType);
+  constructor(filterModel) {
+    super();
+    this.#tripService = new TripService();
+    this.#destinationsModel = new DestinationsModel();
+    this.#offersModel = new OffersModel();
     this.#filterModel = filterModel;
   }
+
+  async init() {
+    try {
+      const [points] = await Promise.all([
+        this.#tripService.getPoints(),
+        this.#destinationsModel.init(),
+        this.#offersModel.init(),
+      ]);
+      this.#points = points;
+    } catch (error) {
+      this.#points = [];
+      this.#destinationsModel.setDestinations([]);
+      this.#offersModel.setOffersByType({});
+    }
+    this._notify('INIT');
+  }
+
 
   get points() {
     const currentFilter = this.#filterModel.getFilter();
@@ -35,7 +56,7 @@ export default class TripModel {
   }
 
   getAllPoints() {
-    return [...this.#points];
+    return this.#points;
   }
 
   // Запись точек маршрута
@@ -60,13 +81,17 @@ export default class TripModel {
     return this.#offersModel.getOffersForType(type);
   }
 
-  updatePoint(id, updatedPoint) {
-    const index = this.#points.findIndex((point) => point.id === id);
+  async updatePoint(updateType, update) {
+    const updatedPoint = await this.#tripService.updatePoint(update);
+    const index = this.#points.findIndex((point) => point.id === updatedPoint.id);
     if (index === -1) {
-      this.#points.push(updatedPoint);
-    } else {
-      this.#points[index] = { ...updatedPoint }; // Создаём копию, чтобы избежать мутаций
+      throw new Error('Point not found');
     }
+    this.#points = [
+      ...this.#points.slice(0, index),
+      updatedPoint,
+      ...this.#points.slice(index + 1),
+    ];
     this.#notifyObservers();
   }
 
