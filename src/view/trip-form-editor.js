@@ -16,7 +16,6 @@ export default class TripFormEdit extends AbstractStatefulView {
 
   constructor(point, destinations, offersByType, onFormSubmit, onRollupClick, onDeleteClick) {
     super();
-    //this.#point = point;
     this.#destinations = destinations;
     this.#offersByType = offersByType;
     this.#handleFormSubmit = onFormSubmit;
@@ -26,6 +25,8 @@ export default class TripFormEdit extends AbstractStatefulView {
     // Инициализируем состояние
     this.#initialState = structuredClone({
       point: { ...point, offers: point.offers || [] },
+      isSaving: false,
+      isDeleting: false,
     });
     this._state = structuredClone(this.#initialState);
 
@@ -52,6 +53,9 @@ export default class TripFormEdit extends AbstractStatefulView {
 
     const formattedDateFrom = dateFrom ? dayjs(dateFrom).format('DD/MM/YY HH:mm') : '';
     const formattedDateTo = dateTo ? dayjs(dateTo).format('DD/MM/YY HH:mm') : '';
+
+    const saveButtonText = this._state.isSaving ? 'Saving...' : 'Save';
+    const deleteButtonText = this._state.isDeleting ? 'Deleting...' : 'Delete';
     return `
       <li class="trip-events__item">
         <form class="event event--edit" action="#" method="post">
@@ -97,8 +101,8 @@ export default class TripFormEdit extends AbstractStatefulView {
               </label>
               <input class="event__input event__input--price" id="event-price-1" type="number" min="0" step="1" name="event-price" value="${basePrice}" required>
             </div>
-            <button class="event__save-btn btn btn--blue" type="submit">Save</button>
-            <button class="event__reset-btn" type="reset">${this._state.point.id ? 'Delete' : 'Cancel'}</button>
+            <button class="event__save-btn btn btn--blue" type="submit">${saveButtonText}</button>
+            <button class="event__reset-btn" type="reset">${deleteButtonText}</button>
             ${this._state.point.id ? `
               <button class="event__rollup-btn" type="button">
                 <span class="visually-hidden">Close event</span>
@@ -112,7 +116,7 @@ export default class TripFormEdit extends AbstractStatefulView {
                 <div class="event__available-offers">
                   ${availableOffers.map((offer) => `
                     <div class="event__offer-selector">
-                      <input class="event__offer-checkbox visually-hidden" id="event-offer-${offer.id}-1" type="checkbox" name="event-offer-${offer.id}" ${offers.includes(offer.id) ? 'checked' : ''}>
+                      <input class="event__offer-checkbox visually-hidden" id="event-offer-${offer.id}-1" type="checkbox" name="event-offer-${offer.id}" ${offers.includes(offer.id) ? 'checked' : ''} data-offer-id="${offer.id}">
                       <label class="event__offer-label" for="event-offer-${offer.id}-1">
                         <span class="event__offer-title">${offer.title}</span>
                         +€ <span class="event__offer-price">${offer.price}</span>
@@ -144,23 +148,14 @@ export default class TripFormEdit extends AbstractStatefulView {
   }
 
   #initFlatpickr() {
-    const startInput = this.element.querySelector('#event-start-time-1');
-    const endInput = this.element.querySelector('#event-end-time-1');
+    const startDateInput = this.element.querySelector('#event-start-time-1');
+    const endDateInput = this.element.querySelector('#event-end-time-1');
 
-    const flatpickrOptions = {
+    const commonOptions = {
       dateFormat: 'd/m/y H:i',
       enableTime: true,
-      time24hr: true,
-      defaultDate: this._state.point.dateFrom || this._state.point.dateTo || new Date(),
-      onChange: (selectedDates, dateStr, instance) => {
-        const field = instance.element.id === 'event-start-time-1' ? 'dateFrom' : 'dateTo';
-        this._setState({
-          point: {
-            ...this._state.point,
-            [field]: selectedDates[0] ? selectedDates[0].toISOString() : null,
-          },
-        });
-      },
+      'time_24hr': true,
+      locale: { firstDayOfWeek: 1 },
     };
 
     if (this.#flatpickrStart) {
@@ -170,15 +165,36 @@ export default class TripFormEdit extends AbstractStatefulView {
       this.#flatpickrEnd.destroy();
     }
 
-    this.#flatpickrStart = flatpickr(startInput, flatpickrOptions);
-    this.#flatpickrEnd = flatpickr(endInput, flatpickrOptions);
+    // Дата начала (From)
+    this.#flatpickrStart = flatpickr(startDateInput, {
+      ...commonOptions,
+      defaultDate: this._state.point.dateFrom,
+      onChange: ([userDate]) => {
+        const newDateFrom = userDate ? userDate.toISOString() : null;
+        this._setState({ point: { ...this._state.point, dateFrom: newDateFrom } });
 
-    if (this._state.point.dateFrom) {
-      this.#flatpickrStart.setDate(dayjs(this._state.point.dateFrom).toDate());
-    }
-    if (this._state.point.dateTo) {
-      this.#flatpickrEnd.setDate(dayjs(this._state.point.dateTo).toDate());
-    }
+        if (this.#flatpickrEnd) {
+          this.#flatpickrEnd.set('minDate', newDateFrom ? dayjs(newDateFrom).add(1, 'minute').toISOString() : null);
+          const currentEndDate = this._state.point.dateTo ? dayjs(this._state.point.dateTo) : null;
+          if (newDateFrom && currentEndDate && currentEndDate.isBefore(dayjs(newDateFrom).add(1,'minute'))) {
+            const newEndDate = dayjs(newDateFrom).add(1, 'hour').toISOString();
+            this._setState({ point: { ...this._state.point, dateTo: newEndDate } });
+            this.#flatpickrEnd.setDate(newEndDate, true);
+          }
+        }
+      },
+    });
+
+    // Дата окончания (To)
+    this.#flatpickrEnd = flatpickr(endDateInput, {
+      ...commonOptions,
+      defaultDate: this._state.point.dateTo,
+      minDate: this._state.point.dateFrom ? dayjs(this._state.point.dateFrom).add(1, 'minute').toISOString() : null,
+      onChange: ([userDate]) => {
+        const newDateTo = userDate ? userDate.toISOString() : null;
+        this._setState({ point: { ...this._state.point, dateTo: newDateTo } });
+      },
+    });
   }
 
   _restoreHandlers() {
@@ -200,16 +216,30 @@ export default class TripFormEdit extends AbstractStatefulView {
     destinationInput.addEventListener('change', this.#destinationChangeHandler);
     destinationInput.addEventListener('focus', this.#destinationFocusHandler);
     destinationInput.addEventListener('blur', this.#destinationBlurHandler);
+
+    //Обработчик кнопки Delete
     this.element.querySelector('.event__reset-btn').addEventListener('click', this.#deleteOrCancelHandler);
+
+    this.element.querySelector('#event-price-1').addEventListener('input', this.#priceInputHandler);
+
+    const offersContainer = this.element.querySelector('.event__available-offers');
+    if (offersContainer) {
+      offersContainer.addEventListener('change', this.#offerChangeHandler);
+    }
 
     this.#initFlatpickr(); // Инициализация flatpickr
   }
 
   #formSubmitHandler = (evt) => {
     evt.preventDefault();
-    const updatedPoint = this.#getUpdatedPoint();
-    this.#handleFormSubmit(updatedPoint);
-    this.#resetFlatpickr();
+    const { type, destinationId, basePrice, dateFrom, dateTo } = this._state.point;
+    if (!type || !destinationId || basePrice === '' || !dateFrom || !dateTo) {
+      this.shake(); return;
+    }
+    if (dayjs(dateTo).isBefore(dayjs(dateFrom))) {
+      this.shake(); return;
+    }
+    this.#handleFormSubmit(this.#getUpdatedPoint());
   };
 
   #rollupClickHandler = (evt) => {
@@ -220,30 +250,20 @@ export default class TripFormEdit extends AbstractStatefulView {
     this.#resetFlatpickr();
   };
 
-  #deleteOrCancelHandler = (evt) => {
+  #deleteOrCancelHandler = (evt) => { // Для формы редактирования это всегда Delete
     evt.preventDefault();
-    this.resetToInitialState(); // Откат к исходному состоянию перед закрытием
-    if (this._state.point.id) {
-      this.#handleDeleteClick(); // Для существующей точки вызываем удаление
-    } else {
-      this.#handleRollupClick(); // Для новой точки просто закрываем
-    }
-    this.#resetFlatpickr();
+    this.#handleDeleteClick();
   };
 
   #typeChangeHandler = (evt) => {
-    let newType = evt.target.value; // Получаем значение, например, "taxi"
-    // Приводим к формату с заглавной буквы
-    newType = newType.charAt(0).toUpperCase() + newType.slice(1).toLowerCase();
+    const newType = evt.target.value;
     this.updateElement({
       point: {
         ...this._state.point,
         type: newType,
-        offers: [], // Сбрасываем выбранные опции при смене типа
+        offers: [], // Сбрасываем офферы при смене типа
       },
     });
-    this.#resetFlatpickr();
-    this.#initFlatpickr();
   };
 
   #destinationInputHandler = (evt) => {
@@ -288,28 +308,45 @@ export default class TripFormEdit extends AbstractStatefulView {
     }
   };
 
+  #priceInputHandler = (evt) => {
+    const newPrice = evt.target.value.replace(/[^0-9]/g, '');
+    evt.target.value = newPrice;
+    this._setState({
+      point: { ...this._state.point, basePrice: newPrice }
+    });
+  };
+
+  #offerChangeHandler = (evt) => {
+    if (evt.target.matches('.event__offer-checkbox')) {
+      const offerId = evt.target.dataset.offerId;
+      const currentOffers = new Set(this._state.point.offers.map(String));
+      if (evt.target.checked) {
+        currentOffers.add(offerId);
+      } else {
+        currentOffers.delete(offerId);
+      }
+      this._setState({ // Используем _setState, чтобы не вызвать полную перерисовку сразу
+        point: { ...this._state.point, offers: Array.from(currentOffers) }
+      });
+    }
+  };
+
   #getUpdatedPoint() {
-    const form = this.element.querySelector('form.event--edit');
-    const formData = new FormData(form);
-
-    const type = formData.get('event-type') || this._state.point.type;
-    const destinationName = formData.get('event-destination');
-    const destination = this.#destinations.find((dest) => dest.name === destinationName);
-
-    const updatedPoint = {
-      id: this._state.point.id, // Явно сохраняем ID
-      type: type.charAt(0).toUpperCase() + type.slice(1).toLowerCase(),
-      destinationId: destination?.id || this._state.point.destinationId,
-      dateFrom: this._state.point.dateFrom,
-      dateTo: this._state.point.dateTo,
-      basePrice: parseInt(formData.get('event-price'), 10) || this._state.point.basePrice || 0,
-      offers: Array.from(formData.entries())
-        .filter(([key]) => key.startsWith('event-offer-'))
-        .map(([key]) => key.replace('event-offer-', '')),
-      isFavorite: this._state.point.isFavorite || false,
+    // Собираем данные из _state
+    const pointData = this._state.point;
+    return {
+      ...pointData,
+      basePrice: Number(pointData.basePrice) || 0,
+      offers: pointData.offers || [],
     };
+  }
 
-    return updatedPoint;
+  setSavingState(isSaving) {
+    this.updateElement({ isSaving, isDeleting: false });
+  }
+
+  setDeletingState(isDeleting) {
+    this.updateElement({ isDeleting, isSaving: false });
   }
 
   #resetFlatpickr() {

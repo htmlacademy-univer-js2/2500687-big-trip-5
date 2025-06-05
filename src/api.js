@@ -50,6 +50,29 @@ export default class TripService extends ApiService {
     return this.#adaptPointToClient(updatedPoint);
   }
 
+  async addPoint(point) {
+    const serverPoint = this.#adaptPointToServer(point);
+    const response = await this._load({
+      url: 'points',
+      method: 'POST',
+      body: JSON.stringify(serverPoint),
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+    });
+    const newPoint = await ApiService.parseResponse(response);
+    return this.#adaptPointToClient(newPoint);
+  }
+
+  async deletePoint(pointId) {
+    const response = await this._load({
+      url: `points/${pointId}`,
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete point: ${response.statusText}`);
+    }
+    return response;
+  }
+
   #adaptPointToClient(serverPoint) {
     return {
       id: serverPoint.id,
@@ -66,13 +89,13 @@ export default class TripService extends ApiService {
   #adaptPointToServer(clientPoint) {
     return {
       id: clientPoint.id,
+      type: String(clientPoint.type || '').toLowerCase(),
       base_price: clientPoint.basePrice,
       date_from: clientPoint.dateFrom,
       date_to: clientPoint.dateTo,
       destination: clientPoint.destinationId,
       is_favorite: clientPoint.isFavorite,
-      offers: clientPoint.offers || [],
-      type: String(clientPoint.type || '').toLowerCase(),
+      offers: clientPoint.offers || []
     };
   }
 }

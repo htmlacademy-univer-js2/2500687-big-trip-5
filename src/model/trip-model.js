@@ -5,13 +5,19 @@ import OffersModel from './offers-model.js';
 import {isFuturePoint, isPresentPoint, isPastPoint} from '../mock/utils.js';
 import dayjs from 'dayjs';
 
+const UpdateType = { // Типы обновлений
+  PATCH: 'PATCH',
+  MINOR: 'MINOR',
+  MAJOR: 'MAJOR',
+  INIT: 'INIT',
+};
+
 export default class TripModel extends Observable {
   #tripService = null;
   #points = [];
   #destinationsModel = null;
   #offersModel = null;
   #filterModel = null;
-  #observers = [];
 
   constructor(filterModel) {
     super();
@@ -23,18 +29,19 @@ export default class TripModel extends Observable {
 
   async init() {
     try {
-      const [points] = await Promise.all([
-        this.#tripService.getPoints(),
+      await Promise.all([
         this.#destinationsModel.init(),
         this.#offersModel.init(),
       ]);
+      const points = await this.#tripService.getPoints();
       this.#points = points;
+      this._notify(UpdateType.INIT);
     } catch (error) {
       this.#points = [];
       this.#destinationsModel.setDestinations([]);
       this.#offersModel.setOffersByType({});
+      this._notify(UpdateType.INIT, {error: true}); // Уведомляем об ошибке инициализации
     }
-    this._notify('INIT');
   }
 
 
@@ -62,7 +69,7 @@ export default class TripModel extends Observable {
   // Запись точек маршрута
   setPoints(points) {
     this.#points = [...points]; // Перезаписываем массив
-    this.#notifyObservers();
+    this._notify(UpdateType.MAJOR);
   }
 
   get destinations() {
@@ -77,47 +84,49 @@ export default class TripModel extends Observable {
     return this.#destinationsModel.getDestinationById(id);
   }
 
-  getOffersByType(type) {
+  getOffersForPointType(type) {
     return this.#offersModel.getOffersForType(type);
   }
 
   async updatePoint(updateType, update) {
-    const updatedPoint = await this.#tripService.updatePoint(update);
-    const index = this.#points.findIndex((point) => point.id === updatedPoint.id);
-    if (index === -1) {
-      throw new Error('Point not found');
+    try {
+      const updatedPoint = await this.#tripService.updatePoint(update);
+      const index = this.#points.findIndex((point) => point.id === updatedPoint.id);
+      if (index === -1) {
+        throw new Error('Point not found for update');
+      }
+      this.#points = [
+        ...this.#points.slice(0, index),
+        updatedPoint,
+        ...this.#points.slice(index + 1),
+      ];
+      this._notify(updateType, updatedPoint);
+    } catch (error) {
+      throw new Error(`Can't update point: ${error.message}`);
     }
-    this.#points = [
-      ...this.#points.slice(0, index),
-      updatedPoint,
-      ...this.#points.slice(index + 1),
-    ];
-    this.#notifyObservers();
   }
 
-  deletePoint(id) {
-    const index = this.#points.findIndex((point) => point.id === id);
-    if (index !== -1) {
+  async addPoint(updateType, newPointData) {
+    try {
+      const createdPoint = await this.#tripService.addPoint(newPointData);
+      this.#points.unshift(createdPoint);
+      this._notify(updateType, createdPoint);
+    } catch (error) {
+      throw new Error(`Can't add point: ${error.message}`);
+    }
+  }
+
+  async deletePoint(updateType, pointId) {
+    try {
+      await this.#tripService.deletePoint(pointId);
+      const index = this.#points.findIndex((point) => point.id === pointId);
+      if (index === -1) {
+        throw new Error('Point not found for deletion in local cache');
+      }
       this.#points.splice(index, 1);
-      this.#notifyObservers(); // Уведомляем наблюдателей об изменении
+      this._notify(updateType, {id: pointId}); // Передаем ID удаленной точки
+    } catch (error) {
+      throw new Error(`Can't delete point: ${error.message}`);
     }
-  }
-
-  addPoint(newPoint) {
-    this.#points.push(newPoint);
-    this.#notifyObservers(); // Уведомляем наблюдателей об изменении
-  }
-
-  // Паттерн наблюдателя
-  addObserver(observer) {
-    this.#observers.push(observer);
-  }
-
-  removeObserver(observer) {
-    this.#observers = this.#observers.filter((obs) => obs !== observer);
-  }
-
-  #notifyObservers() {
-    this.#observers.forEach((observer) => observer());
   }
 }

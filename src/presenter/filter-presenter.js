@@ -1,5 +1,5 @@
 import FiltersView from '../view/filters-view.js';
-import { render, replace } from '../framework/render.js';
+import {render, replace, remove} from '../framework/render.js';
 
 export default class FilterPresenter {
   #container = null;
@@ -11,26 +11,42 @@ export default class FilterPresenter {
     this.#container = container;
     this.#filterModel = filterModel;
     this.#tripModel = tripModel;
+
+    // Подписываемся на изменения модели фильтра
+    this.#filterModel.addObserver(this.#handleFilterModelUpdate);
+    // Подписываемся на изменения модели путешествий (когда меняется список точек)
+    this.#tripModel.addObserver(this.#handleFilterModelUpdate);
   }
 
   init() {
-    const points = this.#tripModel.getAllPoints();
-    const currentFilter = this.#filterModel.getFilter();
-
-    this.#filterComponent = new FiltersView(points, currentFilter, this.#handleFilterChange.bind(this));
-    render(this.#filterComponent, this.#container);
+    // Первоначальный рендер компонента фильтров
+    this.#renderFilterComponent();
   }
 
-  #handleFilterChange(filterType) {
-    this.#filterModel.setFilter(filterType);
+  #renderFilterComponent() {
+    const points = this.#tripModel.getAllPoints(); // Получаем ВСЕ точки для логики disabled
+    const currentFilter = this.#filterModel.getFilter(); // Получаем ТЕКУЩИЙ фильтр из модели
+    const prevFilterComponent = this.#filterComponent;
 
-    // Перерендерим FiltersView с новыми данными
-    const newFilterComponent = new FiltersView(
-      this.#tripModel.getAllPoints(),
-      filterType,
-      this.#handleFilterChange.bind(this)
+    this.#filterComponent = new FiltersView(
+      points,
+      currentFilter,
+      this.#handleFilterChange
     );
-    replace(newFilterComponent, this.#filterComponent);
-    this.#filterComponent = newFilterComponent;
+
+    if (prevFilterComponent) {
+      replace(this.#filterComponent, prevFilterComponent);
+      remove(prevFilterComponent);
+    } else {
+      render(this.#filterComponent, this.#container);
+    }
   }
+
+  #handleFilterChange = (filterType) => {
+    this.#filterModel.setFilter(filterType);
+  };
+
+  #handleFilterModelUpdate = () => {
+    this.#renderFilterComponent(); // Перерисовываем компонент фильтров с актуальным состоянием
+  };
 }
