@@ -1,4 +1,3 @@
-/* eslint-disable camelcase */
 import ApiService from './framework/api-service.js';
 
 const BASE_URL = 'https://24.objects.htmlacademy.pro/big-trip';
@@ -90,11 +89,11 @@ export default class TripService extends ApiService {
     return {
       id: clientPoint.id,
       type: String(clientPoint.type || '').toLowerCase(),
-      base_price: clientPoint.basePrice,
-      date_from: clientPoint.dateFrom,
-      date_to: clientPoint.dateTo,
+      'base_price': clientPoint.basePrice,
+      'date_from': clientPoint.dateFrom,
+      'date_to': clientPoint.dateTo,
       destination: clientPoint.destinationId,
-      is_favorite: clientPoint.isFavorite,
+      'is_favorite': clientPoint.isFavorite,
       offers: clientPoint.offers || []
     };
   }

@@ -2,6 +2,7 @@ import TripModel from './model/trip-model.js';
 import TripPresenter from './presenter/trip-presenter.js';
 import FilterModel from './model/filter-model.js';
 import FilterPresenter from './presenter/filter-presenter.js';
+import TripInfoPresenter from './presenter/trip-info-presenter.js';
 import UiBlocker from './framework/ui-blocker/ui-blocker.js';
 
 const TimeLimit = {
@@ -17,15 +18,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     lowerLimit: TimeLimit.LOWER_LIMIT,
     upperLimit: TimeLimit.UPPER_LIMIT,
   });
-
+  const tripMainContainer = document.querySelector('.trip-main');
   const tripPresenter = new TripPresenter({model: tripModel, filterModel, uiBlocker});
   const filtersContainer = document.querySelector('.trip-controls__filters');
+
+  const tripInfoPresenter = new TripInfoPresenter({ // <--- Создаем
+    container: tripMainContainer,
+    tripModel
+  });
+
   const filterPresenter = new FilterPresenter({
     container: filtersContainer, // Контейнер для фильтров
     filterModel,
     tripModel, // Передаём tripModel для получения точек
   });
-  await tripModel.init();
-  filterPresenter.init(); // Инициализируем FilterPresenter
   tripPresenter.init();
+  filterPresenter.init();
+  await tripModel.init();
+  tripInfoPresenter.init();
 });

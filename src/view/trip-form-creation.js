@@ -48,6 +48,11 @@ export default class TripFormCreate extends AbstractStatefulView {
 
     const saveButtonText = this._state.isSaving ? 'Saving...' : 'Save';
 
+    // Определяем, есть ли информация о пункте назначения
+    // Пункт назначения считается "информативным", если есть описание ИЛИ картинки
+    const hasDestinationInfo = destination && (destination.description || (destination.pictures && destination.pictures.length > 0));
+
+
     return `
       <li class="trip-events__item">
         <form class="event event--edit" action="#" method="post">
@@ -113,19 +118,21 @@ export default class TripFormCreate extends AbstractStatefulView {
                 </div>
               </section>
             ` : ''}
-            <section class="event__section event__section--destination">
-              <h3 class="event__section-title event__section-title--destination">Destination</h3>
-              <p class="event__destination-description">${destination.description}</p>
-              ${destination.pictures.length > 0 ? `
-                <div class="event__photos-container">
-                  <div class="event__photos-tape">
-                    ${destination.pictures.map((pic) => `
-                      <img class="event__photo" src="${pic.src}" alt="${pic.description}">
-                    `).join('')}
+            ${hasDestinationInfo ? `
+              <section class="event__section event__section--destination">
+                <h3 class="event__section-title event__section-title--destination">Destination</h3>
+                <p class="event__destination-description">${destination.description || ''}</p>
+                ${(destination.pictures && destination.pictures.length > 0) ? `
+                  <div class="event__photos-container">
+                    <div class="event__photos-tape">
+                      ${destination.pictures.map((pic) => `
+                        <img class="event__photo" src="${pic.src}" alt="${pic.description}">
+                      `).join('')}
+                    </div>
                   </div>
-                </div>
-              ` : ''}
-            </section>
+                ` : ''}
+              </section>
+            ` : ''}
           </section>
         </form>
       </li>
