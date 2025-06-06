@@ -1,7 +1,8 @@
 import SortView from '../view/sort-view.js';
 import TripFormCreate from '../view/trip-form-creation.js';
 import TripListView from '../view/trip-list-view.js';
-import EmptyListView from '../view/empty-list-view.js'; // Для сообщений "нет точек" и "ошибка загрузки"
+import EmptyListView from '../view/empty-list-view.js'; // Для сообщений "нет точек"
+import ErrorMessageView from '../view/error-message-view.js';
 import PointPresenter from './point-presenter.js';
 import LoadingView from '../view/loading-view.js'; // Для сообщения "Loading..."
 import {render, replace, remove} from '../framework/render.js';
@@ -75,6 +76,7 @@ export default class TripPresenter {
   init() {
     // Слушатель на кнопку "New Event"
     this.#newEventButton.addEventListener('click', this.#handleNewEventClick);
+    this.#renderBoard();
   }
 
   // Основной метод рендеринга "доски" (сортировка, список точек или сообщения)
@@ -140,15 +142,8 @@ export default class TripPresenter {
   // Показывает сообщение об ошибке загрузки данных
   #renderErrorMessage() {
     this.#removeNonBoardStaticMessages(); // Удаляем другие сообщения
-    this.#emptyListComponent = new EmptyListView('error-load'); // Специальный тип для сообщения об ошибке
+    this.#emptyListComponent = new ErrorMessageView();
     render(this.#emptyListComponent, this.#tripEventsContainer);
-    if (this.#sortComponent) {
-      remove(this.#sortComponent);
-    }
-    // Не удаляем TripListComponent, если точки уже загружены
-    if (this.#tripListComponent.element.parentElement) {
-      remove(this.#tripListComponent);
-    }
   }
 
 
@@ -188,9 +183,7 @@ export default class TripPresenter {
         points = points.filter((point) => dayjs(point.dateTo).isBefore(now));
         break;
       case FilterType.PRESENT:
-        points = points.filter((point) =>
-          dayjs(point.dateFrom) <= now && now <= dayjs(point.dateTo)
-        );
+        points = points.filter((point) => dayjs(point.dateFrom) <= now && now <= dayjs(point.dateTo));
         break;
       case FilterType.FUTURE:
         points = points.filter((point) => dayjs(point.dateFrom).isAfter(now));
