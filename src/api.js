@@ -63,17 +63,19 @@ export default class TripService extends ApiService {
   }
 
   async deletePoint(pointId) {
-    const headers = new Headers();
-    await this._load({
+    const response = await this._load({
       url: `points/${pointId}`,
       method: 'DELETE',
-      headers: headers,
     });
+    if (!response.ok) {
+      throw new Error(`Failed to delete point: ${response.statusText}`);
+    }
+    return response;
   }
 
   #adaptPointToClient(serverPoint) {
     return {
-      //id: serverPoint.id,
+      id: serverPoint.id,
       type: serverPoint.type,
       destinationId: serverPoint.destination,
       dateFrom: serverPoint.date_from,
@@ -86,14 +88,14 @@ export default class TripService extends ApiService {
 
   #adaptPointToServer(clientPoint) {
     return {
-      //id: clientPoint.id,
+      id: clientPoint.id,
+      type: String(clientPoint.type || '').toLowerCase(),
       base_price: clientPoint.basePrice,
       date_from: clientPoint.dateFrom,
       date_to: clientPoint.dateTo,
       destination: clientPoint.destinationId,
       is_favorite: clientPoint.isFavorite,
-      offers: clientPoint.offers || [],
-      type: String(clientPoint.type || '').toLowerCase(),
+      offers: clientPoint.offers || []
     };
   }
 }

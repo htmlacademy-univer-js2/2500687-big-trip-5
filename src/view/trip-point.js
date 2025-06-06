@@ -1,5 +1,4 @@
 import AbstractView from '../framework/view/abstract-view.js';
-//import {formatDate, formatTime, getDuration} from '../mock/utils';
 import dayjs from 'dayjs'; // Импортируем dayjs
 import duration from 'dayjs/plugin/duration'; // Плагин для работы с длительностью
 dayjs.extend(duration);
@@ -9,16 +8,18 @@ export default class TripPoint extends AbstractView {
   #destination = null;
   #offers = [];
   #handleEditClick = null;
+  #favoriteClickHandler = null;
 
-  constructor(point, destination, offers, onEditClick) {
+  constructor(point, destination, offers, onEditClick, onFavoriteClick) {
     super();
     this.#point = point;
     this.#destination = destination;
     this.#offers = offers;
     this.#handleEditClick = onEditClick;
-
+    this.#favoriteClickHandler = onFavoriteClick;
     // Навешиваем обработчик
     this.element.querySelector('.event__rollup-btn').addEventListener('click', this.#editClickHandler);
+    this.element.querySelector('.event__favorite-btn').addEventListener('click', this.#favoriteClickHandler);
   }
 
   get template(){
@@ -26,14 +27,14 @@ export default class TripPoint extends AbstractView {
     const destinationName = this.#destination ? this.#destination.name : '';
 
     // Форматируем дату начала и конца события
-    const startTime = dayjs(dateFrom).format('HH:mm'); // Например, 10:30
-    const endTime = dayjs(dateTo).format('HH:mm'); // Например, 11:00
+    const startTime = dayjs(dateFrom).format('HH:mm');
+    const endTime = dayjs(dateTo).format('HH:mm');
 
     // Вычисляем продолжительность
     const durationMs = dayjs(dateTo).diff(dayjs(dateFrom)); // Разница в миллисекундах
     const durationObj = dayjs.duration(durationMs);
 
-    // Формат продолжительности согласно техзаданию
+    // Формат продолжительности
     const days = Math.floor(durationObj.asDays());
     const hours = durationObj.hours();
     const minutes = durationObj.minutes();

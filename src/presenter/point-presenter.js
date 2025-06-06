@@ -1,12 +1,10 @@
 import TripPoint from '../view/trip-point.js';
 import TripFormEdit from '../view/trip-form-editor.js';
-import { render, replace } from '../framework/render.js';
-import UiBlocker from '../framework/ui-blocker/ui-blocker.js';
+import { render, replace, remove } from '../framework/render.js';
 
-const ActionType = {
-  UPDATE: 'UPDATE',
-  DELETE: 'DELETE',
-  ADD: 'ADD',
+const UpdateType = {
+  PATCH: 'PATCH', // Для небольших изменений, как 'favorite'
+  MINOR: 'MINOR', // Для изменений, требующих перерисовки списка (удаление, существенное обновление)
 };
 
 export default class PointPresenter {
@@ -16,144 +14,180 @@ export default class PointPresenter {
   #tripListComponent = null;
   #pointComponent = null;
   #pointEditComponent = null;
-  #onDataChange = null;
-  #onEditStart = null; // Колбэк для уведомления TripPresenter
-  #isEditing = false; // Флаг для отслеживания режима
-  #uiBlocker = null;
+  #onEditStart = null;
+  #isEditing = false;
 
-  constructor({point, destination, offers, destinations, offersByType, tripListComponent, onDataChange, onEditStart}) {
+  #tripModel = null; // Ссылка на модель
+  #uiBlocker = null; // Ссылка на блокировщик
+
+  constructor({point, destinations, offersByType, tripListComponent, onEditStart, tripModel, uiBlocker}) {
     this.#point = point;
-    this.#destinations = destinations;
-    this.#offersByType = offersByType;
+    this.#destinations = destinations; // Это все destinations из модели
+    this.#offersByType = offersByType; // Это все offersByType из модели
     this.#tripListComponent = tripListComponent;
-    this.#onDataChange = onDataChange;
-    this.#onEditStart = onEditStart;
+    this.#onEditStart = onEditStart; // Колбэк для TripPresenter для закрытия других форм
+
+    this.#tripModel = tripModel;
+    this.#uiBlocker = uiBlocker;
+
+    // Получаем данные для конкретной точки (destination, offers)
+    const currentDestination = this.#tripModel.getDestinationById(this.#point.destinationId);
+    const currentOffersForPoint = this.#tripModel.getOffersForPointType(this.#point.type)
+      .filter((offer) => this.#point.offers.map(String).includes(String(offer.id)));
 
     this.#pointComponent = new TripPoint(
-      point,
-      destination,
-      offers,
-      this.#handleEditClick
+      this.#point,
+      currentDestination,
+      currentOffersForPoint,
+      this.#handleEditClick,
+      this.#handleFavoriteClick // Передаем обработчик favorite
     );
-    this.#pointEditComponent = new TripFormEdit(
-      point,
-      this.#destinations, // Передаём весь массив destinations
-      this.#offersByType, // Передаём весь объект offersByType
-      this.#handleFormSubmit,
-      this.#handleRollupClick,
-      this.#handleDeleteClick
-    );
-    this.#uiBlocker = new UiBlocker({
-      lowerLimit: 300,
-      upperLimit: 1000,
-    });
-
-    this.#renderPoint();
   }
 
-  #renderPoint() {
-    render(this.#pointComponent, this.#tripListComponent.element);
-
-    this.#pointComponent.element
-      .querySelector('.event__favorite-btn')
-      .addEventListener('click', this.#handleFavoriteClick);
+  // render() вызывается из TripPresenter при создании экземпляра PointPresenter
+  render() {
+    if (this.#pointComponent && this.#tripListComponent.element) {
+      render(this.#pointComponent, this.#tripListComponent.element);
+    }
   }
 
   resetView() {
     if (this.#isEditing) {
-      this.#pointEditComponent.resetToInitialState();
-      if (this.#pointEditComponent.element && this.#pointEditComponent.element.parentElement) {
+      if (this.#pointEditComponent && this.#pointEditComponent.element.parentElement) {
         replace(this.#pointComponent, this.#pointEditComponent);
+        this.#destroyEditComponent();
       }
+      document.removeEventListener('keydown', this.#escKeyDownHandler);
       this.#isEditing = false;
     }
   }
 
-  resetFormToInitialState() {
-    if (this.#pointEditComponent) {
-      this.#pointEditComponent.resetToInitialState();
+  switchToEditMode() {
+    if (this.#isEditing) {
+      return;
+    }
+    this.#pointEditComponent = new TripFormEdit(
+      this.#point, // Текущая точка для редактирования
+      this.#destinations, // Все пункты назначения
+      this.#offersByType, // Все предложения по типам
+      this.#handleFormSubmit,
+      this.#handleRollupClick,
+      this.#handleDeleteClick
+    );
+    replace(this.#pointEditComponent, this.#pointComponent);
+    document.addEventListener('keydown', this.#escKeyDownHandler);
+    this.#onEditStart(this.#point.id); // Уведомляем TripPresenter, что эта точка редактируется
+    this.#isEditing = true;
+  }
+
+  updatePoint(updatedPoint) {
+    const prevPointComponent = this.#pointComponent;
+    this.#point = updatedPoint;
+    const currentDestination = this.#tripModel.getDestinationById(this.#point.destinationId);
+    const currentOffersForPoint = this.#tripModel.getOffersForPointType(this.#point.type)
+      .filter((offer) => this.#point.offers.map(String).includes(String(offer.id)));
+
+    this.#pointComponent = new TripPoint(
+      this.#point,
+      currentDestination,
+      currentOffersForPoint,
+      this.#handleEditClick,
+      this.#handleFavoriteClick
+    );
+
+    if (prevPointComponent.element?.parentElement) {
+      replace(this.#pointComponent, prevPointComponent);
+      remove(prevPointComponent);
+    } else {
+      render(this.#pointComponent, this.#tripListComponent.element);
     }
   }
 
-  switchToEditMode() {
-    if (!this.#isEditing) {
-      replace(this.#pointEditComponent, this.#pointComponent);
-      this.#isEditing = true;
+  #destroyEditComponent() {
+    if (this.#pointEditComponent) {
+      remove(this.#pointEditComponent);
+      this.#pointEditComponent = null;
     }
+  }
+
+  destroy() {
+    document.removeEventListener('keydown', this.#escKeyDownHandler);
+    remove(this.#pointComponent);
+    this.#destroyEditComponent();
+    this.#pointComponent = null;
   }
 
   #handleEditClick = () => {
-    this.#onEditStart(this.#point.id); // Уведомляем TripPresenter
+    this.switchToEditMode();
+  };
+
+  #escKeyDownHandler = (evt) => {
+    if (evt.key === 'Escape' || evt.key === 'Esc') {
+      evt.preventDefault();
+      this.#pointEditComponent.resetToInitialState(); // Сначала сброс данных формы
+      this.resetView(); // Затем закрытие
+    }
   };
 
   #handleFormSubmit = async (updatedPoint) => {
-    this.#uiBlocker.block();
-    this.#pointEditComponent.startLoading({ isSaving: true });
-    try {
-      await this.#onDataChange(ActionType.UPDATE, updatedPoint);
-      this.#pointEditComponent.stopLoading();
-      this.#uiBlocker.unblock();
+    // Проверяем, были ли изменения. Если нет, просто закрываем форму.
+    const isDataChanged = JSON.stringify(this.#point) !== JSON.stringify(updatedPoint);
+    if (!isDataChanged && !this.#pointEditComponent._state.isSaving) {
       this.resetView();
+      return;
+    }
+
+    this.#uiBlocker.block();
+    this.#pointEditComponent.setSavingState(true);
+    try {
+      await this.#tripModel.updatePoint(UpdateType.MINOR, updatedPoint);
+      this.resetView(); // Закрываем форму после успешного сохранения
     } catch (error) {
-      this.#pointEditComponent.stopLoading();
+      this.#pointEditComponent.shake(() => {
+        this.#pointEditComponent.setSavingState(false);
+      });
+    } finally {
       this.#uiBlocker.unblock();
-      this.#pointEditComponent.shake();
     }
   };
 
   #handleRollupClick = () => {
-    replace(this.#pointComponent, this.#pointEditComponent);
-    this.#isEditing = false;
+    this.#pointEditComponent.resetToInitialState();
+    this.resetView();
   };
 
   #handleDeleteClick = async () => {
     this.#uiBlocker.block();
-    if (!this.#pointEditComponent) {
-      this.#uiBlocker.unblock();
-      return;
-    }
-    this.#pointEditComponent.startLoading({ isDeleting: true });
+    this.#pointEditComponent.setDeletingState(true);
     try {
-      await this.#onDataChange(ActionType.DELETE, this.#point);
-      this.#uiBlocker.unblock();
-      this.#onEditStart(null);
-      this.destroy();
+      await this.#tripModel.deletePoint(UpdateType.MINOR, this.#point.id);
     } catch (error) {
-      if (this.#pointEditComponent) {
-        this.#pointEditComponent.stopLoading();
-        this.#pointEditComponent.shake();
-      }
+      this.#pointEditComponent.shake(() => {
+        this.#pointEditComponent.setDeletingState(false);
+      });
+    } finally {
       this.#uiBlocker.unblock();
     }
   };
 
-  #handleFavoriteClick = (evt) => {
-    evt.preventDefault();
-    const updatedPoint = { ...this.#point, isFavorite: !this.#point.isFavorite };
-    this.#onDataChange(ActionType.UPDATE, updatedPoint);
+  #handleFavoriteClick = async () => {
+    const updatedPoint = {
+      id: this.#point.id,
+      type: this.#point.type,
+      destinationId: this.#point.destinationId,
+      dateFrom: this.#point.dateFrom,
+      dateTo: this.#point.dateTo,
+      basePrice: this.#point.basePrice,
+      offers: this.#point.offers,
+      isFavorite: !this.#point.isFavorite,
+    };
+    // Не блокируем UI для favorite, только shake при ошибке
+    try {
+      await this.#tripModel.updatePoint(UpdateType.PATCH, updatedPoint);
+      // Модель обновится, TripPresenter перерисует (или только эту точку)
+    } catch (error) {
+      // Эффект «покачивание головой» применяется к карточке точки маршрута
+      this.#pointComponent.shake();
+    }
   };
-
-  destroy() {
-    if (this.#pointComponent) {
-      const favoriteBtn = this.#pointComponent.element.querySelector('.event__favorite-btn');
-      if (favoriteBtn) {
-        favoriteBtn.removeEventListener('click', this.#handleFavoriteClick);
-      }
-      if (this.#pointComponent.element.parentElement) {
-        this.#pointComponent.element.remove();
-      }
-      this.#pointComponent = null;
-    }
-    if (this.#pointEditComponent) {
-      if (this.#pointEditComponent.element.parentElement) {
-        this.#pointEditComponent.element.remove();
-      }
-      this.#pointEditComponent = null;
-    }
-    this.#isEditing = false;
-  }
-
-  get element() {
-    return this.#pointComponent.element || this.#pointEditComponent.element;
-  }
 }
