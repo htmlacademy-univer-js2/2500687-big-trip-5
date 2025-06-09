@@ -4,7 +4,7 @@ import duration from 'dayjs/plugin/duration';
 import he from 'he';
 dayjs.extend(duration);
 
-export default class TripPoint extends AbstractView {
+export default class TripPointView extends AbstractView {
   #point = null;
   #destination = null;
   #offers = [];
