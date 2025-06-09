@@ -1,4 +1,4 @@
-import TripPoint from '../view/trip-point.js';
+import TripPointView from '../view/trip-point-view.js';
 import TripFormEditView from '../view/trip-form-edit-view.js';
 import {render, replace, remove} from '../framework/render.js';
 import {UpdateType} from '../utils.js';
@@ -30,7 +30,7 @@ export default class PointPresenter {
     const currentOffersForPoint = this.#tripModel.getOffersForPointType(this.#point.type)
       .filter((offer) => this.#point.offers.map(String).includes(String(offer.id)));
 
-    this.#pointComponent = new TripPoint(
+    this.#pointComponent = new TripPointView(
       this.#point,
       currentDestination,
       currentOffersForPoint,
@@ -81,7 +81,7 @@ export default class PointPresenter {
     const currentOffersForPoint = this.#tripModel.getOffersForPointType(this.#point.type)
       .filter((offer) => this.#point.offers.map(String).includes(String(offer.id)));
 
-    this.#pointComponent = new TripPoint(
+    this.#pointComponent = new TripPointView(
       this.#point,
       currentDestination,
       currentOffersForPoint,
