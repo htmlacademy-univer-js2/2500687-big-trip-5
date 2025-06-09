@@ -3,24 +3,24 @@ import AbstractView from '../framework/view/abstract-view.js';
 export default class SortView extends AbstractView {
   #currentSortType = 'day';
   #disabledSortTypes = ['event', 'offer'];
-  #handleSortTypeChange = null;
+  #onSortTypeChange = null;
 
   constructor({currentSortType, disabledSortTypes, onSortTypeChange} = {}) {
     super();
     this.#currentSortType = currentSortType || 'day';
     this.#disabledSortTypes = disabledSortTypes || ['event', 'offer'];
-    this.#handleSortTypeChange = onSortTypeChange;
+    this.#onSortTypeChange = onSortTypeChange;
 
-    this.element.addEventListener('click', this.#sortTypeChangeHandler); // Добавляем обработчик клика
+    this.element.addEventListener('click', this.#sortTypeChangeHandler);
   }
 
   get template() {
     const sortOptions = [
-      { type: 'day', label: 'Day' },
-      { type: 'event', label: 'Event' },
-      { type: 'time', label: 'Time' },
-      { type: 'price', label: 'Price' },
-      { type: 'offer', label: 'Offers' },
+      {type: 'day', label: 'Day'},
+      {type: 'event', label: 'Event'},
+      {type: 'time', label: 'Time'},
+      {type: 'price', label: 'Price'},
+      {type: 'offer', label: 'Offers'},
     ];
     return `
       <form class="trip-sort" action="#" method="get">
@@ -50,8 +50,8 @@ export default class SortView extends AbstractView {
     }
 
     const sortType = input.dataset.sortType;
-    if (sortType && this.#handleSortTypeChange) {
-      this.#handleSortTypeChange(sortType);
+    if (sortType && this.#onSortTypeChange) {
+      this.#onSortTypeChange(sortType);
     }
   };
 }

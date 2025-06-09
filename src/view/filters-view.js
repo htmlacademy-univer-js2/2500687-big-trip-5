@@ -1,24 +1,25 @@
 import AbstractView from '../framework/view/abstract-view.js';
-import {isFuturePoint, isPresentPoint, isPastPoint} from '../mock/utils.js';
+import dayjs from 'dayjs';
 
 export default class FiltersView extends AbstractView{
   #points = [];
-  #handleFilterChange = null;
+  #onFilterChange = null;
   #currentFilterType = null;
 
   constructor(points, currentFilterType, onFilterChange) {
     super();
     this.#points = points || [];
     this.#currentFilterType = currentFilterType || 'everything';
-    this.#handleFilterChange = onFilterChange;
+    this.#onFilterChange = onFilterChange;
 
     this.element.addEventListener('change', this.#filterChangeHandler);
   }
 
   get template() {
-    const hasFuturePoints = this.#points.some((point) => isFuturePoint(point));
-    const hasPresentPoints = this.#points.some((point) => isPresentPoint(point));
-    const hasPastPoints = this.#points.some((point) => isPastPoint(point));
+    const now = dayjs();
+    const hasFuturePoints = this.#points.some((point) => dayjs(point.dateFrom).isAfter(now));
+    const hasPresentPoints = this.#points.some((point) => dayjs(point.dateFrom) <= now && now <= dayjs(point.dateTo));
+    const hasPastPoints = this.#points.some((point) => dayjs(point.dateTo).isBefore(now));
     const hasPoints = this.#points.length > 0;
     return `
       <form class="trip-filters" action="#" method="get">
@@ -50,6 +51,6 @@ export default class FiltersView extends AbstractView{
   #filterChangeHandler = (evt) => {
     evt.preventDefault();
     const newFilterType = evt.target.value;
-    this.#handleFilterChange(newFilterType);
+    this.#onFilterChange(newFilterType);
   };
 }

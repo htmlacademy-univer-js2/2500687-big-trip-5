@@ -17,11 +17,11 @@ export default class OffersModel {
   }
 
   getOffersByType() {
-    return { ...this.#offersByType };
+    return {...this.#offersByType};
   }
 
   setOffersByType(offersByType) {
-    this.#offersByType = { ...offersByType };
+    this.#offersByType = {...offersByType};
   }
 
   getOffersForType(type) {

@@ -1,53 +1,48 @@
 import AbstractView from '../framework/view/abstract-view.js';
-import dayjs from 'dayjs'; // Импортируем dayjs
-import duration from 'dayjs/plugin/duration'; // Плагин для работы с длительностью
+import dayjs from 'dayjs';
+import duration from 'dayjs/plugin/duration';
+import he from 'he';
 dayjs.extend(duration);
 
 export default class TripPoint extends AbstractView {
   #point = null;
   #destination = null;
   #offers = [];
-  #handleEditClick = null;
-  #favoriteClickHandler = null;
+  #onEditClick = null;
+  #onFavoriteClick = null;
 
   constructor(point, destination, offers, onEditClick, onFavoriteClick) {
     super();
     this.#point = point;
     this.#destination = destination;
     this.#offers = offers;
-    this.#handleEditClick = onEditClick;
-    this.#favoriteClickHandler = onFavoriteClick;
-    // Навешиваем обработчик
+    this.#onEditClick = onEditClick;
+    this.#onFavoriteClick = onFavoriteClick;
+
     this.element.querySelector('.event__rollup-btn').addEventListener('click', this.#editClickHandler);
-    this.element.querySelector('.event__favorite-btn').addEventListener('click', this.#favoriteClickHandler);
+    this.element.querySelector('.event__favorite-btn').addEventListener('click', this.#onFavoriteClick);
   }
 
   get template(){
-    const { type, dateFrom, dateTo, basePrice, isFavorite } = this.#point;
+    const {type, dateFrom, dateTo, basePrice, isFavorite} = this.#point;
     const destinationName = this.#destination ? this.#destination.name : '';
 
-    // Форматируем дату начала и конца события
     const startTime = dayjs(dateFrom).format('HH:mm');
     const endTime = dayjs(dateTo).format('HH:mm');
 
-    // Вычисляем продолжительность
-    const durationMs = dayjs(dateTo).diff(dayjs(dateFrom)); // Разница в миллисекундах
+    const durationMs = dayjs(dateTo).diff(dayjs(dateFrom));
     const durationObj = dayjs.duration(durationMs);
 
-    // Формат продолжительности
     const days = Math.floor(durationObj.asDays());
     const hours = durationObj.hours();
     const minutes = durationObj.minutes();
 
     let durationFormatted = '';
     if (days > 0) {
-      // Более суток: дни, часы, минуты (например, 51D 02H 30M)
       durationFormatted = `${days.toString().padStart(2, '0')}D ${hours.toString().padStart(2, '0')}H ${minutes.toString().padStart(2, '0')}M`;
     } else if (hours > 0) {
-      // Менее суток: часы, минуты (например, 02H 44M)
       durationFormatted = `${hours.toString().padStart(2, '0')}H ${minutes.toString().padStart(2, '0')}M`;
     } else {
-      // Менее часа: минуты (например, 23M)
       durationFormatted = `${minutes.toString().padStart(2, '0')}M`;
     }
 
@@ -58,7 +53,7 @@ export default class TripPoint extends AbstractView {
           <div class="event__type">
             <img class="event__type-icon" width="42" height="42" src="img/icons/${type.toLowerCase()}.png" alt="Event type icon">
           </div>
-          <h3 class="event__title">${type} ${destinationName}</h3>
+          <h3 class="event__title">${he.encode(type)} ${he.encode(destinationName)}</h3>
           <div class="event__schedule">
             <p class="event__time">
               <time class="event__start-time" datetime="${dateFrom}">${startTime}</time>
@@ -74,7 +69,7 @@ export default class TripPoint extends AbstractView {
           <ul class="event__selected-offers">
             ${this.#offers.map((offer) => `
               <li class="event__offer">
-                <span class="event__offer-title">${offer.title}</span>
+                <span class="event__offer-title">${he.encode(offer.title)}</span>
                 +€<span class="event__offer-price">${offer.price}</span>
               </li>
             `).join('')}
@@ -95,6 +90,6 @@ export default class TripPoint extends AbstractView {
 
   #editClickHandler = (evt) => {
     evt.preventDefault();
-    this.#handleEditClick();
+    this.#onEditClick();
   };
 }

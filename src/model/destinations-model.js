@@ -25,6 +25,6 @@ export default class DestinationsModel {
   }
 
   getDestinationById(id) {
-    return this.#destinations.find((dest) => String(dest.id) === String(id)) || { name: '', description: '', pictures: [] };
+    return this.#destinations.find((dest) => String(dest.id) === String(id)) || {name: '', description: '', pictures: []};
   }
 }

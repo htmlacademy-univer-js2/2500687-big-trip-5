@@ -7,31 +7,28 @@ export default class FilterPresenter {
   #tripModel = null;
   #filterComponent = null;
 
-  constructor({ container, filterModel, tripModel }) {
+  constructor({container, filterModel, tripModel}) {
     this.#container = container;
     this.#filterModel = filterModel;
     this.#tripModel = tripModel;
 
-    // Подписываемся на изменения модели фильтра
-    this.#filterModel.addObserver(this.#handleFilterModelUpdate);
-    // Подписываемся на изменения модели путешествий (когда меняется список точек)
-    this.#tripModel.addObserver(this.#handleFilterModelUpdate);
+    this.#filterModel.addObserver(this.#filterModelUpdateHandler);
+    this.#tripModel.addObserver(this.#filterModelUpdateHandler);
   }
 
   init() {
-    // Первоначальный рендер компонента фильтров
     this.#renderFilterComponent();
   }
 
   #renderFilterComponent() {
-    const points = this.#tripModel.getAllPoints(); // Получаем ВСЕ точки для логики disabled
-    const currentFilter = this.#filterModel.getFilter(); // Получаем ТЕКУЩИЙ фильтр из модели
+    const points = this.#tripModel.points;
+    const currentFilter = this.#filterModel.getFilter();
     const prevFilterComponent = this.#filterComponent;
 
     this.#filterComponent = new FiltersView(
       points,
       currentFilter,
-      this.#handleFilterChange
+      this.#filterTypeSelectHandler
     );
 
     if (prevFilterComponent) {
@@ -42,11 +39,11 @@ export default class FilterPresenter {
     }
   }
 
-  #handleFilterChange = (filterType) => {
+  #filterTypeSelectHandler = (filterType) => {
     this.#filterModel.setFilter(filterType);
   };
 
-  #handleFilterModelUpdate = () => {
-    this.#renderFilterComponent(); // Перерисовываем компонент фильтров с актуальным состоянием
+  #filterModelUpdateHandler = () => {
+    this.#renderFilterComponent();
   };
 }
