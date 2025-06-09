@@ -1,14 +1,11 @@
 import AbstractView from '../framework/view/abstract-view.js';
-//import dayjs from 'dayjs';
-
-//const formatDateForTripInfo = (date) => date ? dayjs(date).format('DD MMM') : '';
 
 export default class TripInfoView extends AbstractView {
   #title = '';
   #dates = '';
   #cost = 0;
 
-  constructor({ title, dates, cost }) {
+  constructor({title, dates, cost}) {
     super();
     this.#title = title;
     this.#dates = dates;
@@ -30,7 +27,6 @@ export default class TripInfoView extends AbstractView {
     `;
   }
 
-  // Методы для обновления отдельных частей, если потребуется
   updateTitle(newTitle) {
     this.element.querySelector('.trip-info__title').textContent = newTitle;
   }

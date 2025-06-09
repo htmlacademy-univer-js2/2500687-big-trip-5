@@ -2,29 +2,19 @@ import Observable from '../framework/observable.js';
 import TripService from '../api.js';
 import DestinationsModel from './destinations-model.js';
 import OffersModel from './offers-model.js';
-import {isFuturePoint, isPresentPoint, isPastPoint} from '../mock/utils.js';
-import dayjs from 'dayjs';
-
-const UpdateType = { // Типы обновлений
-  PATCH: 'PATCH',
-  MINOR: 'MINOR',
-  MAJOR: 'MAJOR',
-  INIT: 'INIT',
-};
+import {UpdateType} from '../utils.js';
 
 export default class TripModel extends Observable {
   #tripService = null;
   #points = [];
   #destinationsModel = null;
   #offersModel = null;
-  #filterModel = null;
 
-  constructor(filterModel) {
+  constructor() {
     super();
     this.#tripService = new TripService();
     this.#destinationsModel = new DestinationsModel();
     this.#offersModel = new OffersModel();
-    this.#filterModel = filterModel;
   }
 
   async init() {
@@ -40,35 +30,16 @@ export default class TripModel extends Observable {
       this.#points = [];
       this.#destinationsModel.setDestinations([]);
       this.#offersModel.setOffersByType({});
-      this._notify(UpdateType.INIT, {error: true}); // Уведомляем об ошибке инициализации
+      this._notify(UpdateType.INIT, {error: true});
     }
   }
-
 
   get points() {
-    const currentFilter = this.#filterModel.getFilter();
-    const currentDate = dayjs(); //Текущая дата
-    switch (currentFilter) {
-      case 'everything':
-        return [...this.#points];
-      case 'future':
-        return this.#points.filter((point) => isFuturePoint(point, currentDate));
-      case 'present':
-        return this.#points.filter((point) => isPresentPoint(point, currentDate));
-      case 'past':
-        return this.#points.filter((point) => isPastPoint(point, currentDate));
-      default:
-        return [...this.#points];
-    }
+    return [...this.#points];
   }
 
-  getAllPoints() {
-    return this.#points;
-  }
-
-  // Запись точек маршрута
   setPoints(points) {
-    this.#points = [...points]; // Перезаписываем массив
+    this.#points = [...points];
     this._notify(UpdateType.MAJOR);
   }
 

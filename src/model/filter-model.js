@@ -1,5 +1,5 @@
 export default class FilterModel {
-  #currentFilter = 'everything'; // Значение по умолчанию
+  #currentFilter = 'everything';
   #observers = [];
 
   getFilter() {

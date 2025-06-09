@@ -1,11 +1,7 @@
 import TripPoint from '../view/trip-point.js';
-import TripFormEdit from '../view/trip-form-editor.js';
-import { render, replace, remove } from '../framework/render.js';
-
-const UpdateType = {
-  PATCH: 'PATCH', // Для небольших изменений, как 'favorite'
-  MINOR: 'MINOR', // Для изменений, требующих перерисовки списка (удаление, существенное обновление)
-};
+import TripFormEditView from '../view/trip-form-edit-view.js';
+import {render, replace, remove} from '../framework/render.js';
+import {UpdateType} from '../utils.js';
 
 export default class PointPresenter {
   #point = null;
@@ -17,20 +13,19 @@ export default class PointPresenter {
   #onEditStart = null;
   #isEditing = false;
 
-  #tripModel = null; // Ссылка на модель
-  #uiBlocker = null; // Ссылка на блокировщик
+  #tripModel = null;
+  #uiBlocker = null;
 
   constructor({point, destinations, offersByType, tripListComponent, onEditStart, tripModel, uiBlocker}) {
     this.#point = point;
-    this.#destinations = destinations; // Это все destinations из модели
-    this.#offersByType = offersByType; // Это все offersByType из модели
+    this.#destinations = destinations;
+    this.#offersByType = offersByType;
     this.#tripListComponent = tripListComponent;
-    this.#onEditStart = onEditStart; // Колбэк для TripPresenter для закрытия других форм
+    this.#onEditStart = onEditStart;
 
     this.#tripModel = tripModel;
     this.#uiBlocker = uiBlocker;
 
-    // Получаем данные для конкретной точки (destination, offers)
     const currentDestination = this.#tripModel.getDestinationById(this.#point.destinationId);
     const currentOffersForPoint = this.#tripModel.getOffersForPointType(this.#point.type)
       .filter((offer) => this.#point.offers.map(String).includes(String(offer.id)));
@@ -39,12 +34,11 @@ export default class PointPresenter {
       this.#point,
       currentDestination,
       currentOffersForPoint,
-      this.#handleEditClick,
-      this.#handleFavoriteClick // Передаем обработчик favorite
+      this.#editClickHandler,
+      this.#favoriteClickHandler
     );
   }
 
-  // render() вызывается из TripPresenter при создании экземпляра PointPresenter
   render() {
     if (this.#pointComponent && this.#tripListComponent.element) {
       render(this.#pointComponent, this.#tripListComponent.element);
@@ -66,17 +60,17 @@ export default class PointPresenter {
     if (this.#isEditing) {
       return;
     }
-    this.#pointEditComponent = new TripFormEdit(
-      this.#point, // Текущая точка для редактирования
-      this.#destinations, // Все пункты назначения
-      this.#offersByType, // Все предложения по типам
-      this.#handleFormSubmit,
-      this.#handleRollupClick,
-      this.#handleDeleteClick
+    this.#pointEditComponent = new TripFormEditView(
+      this.#point,
+      this.#destinations,
+      this.#offersByType,
+      this.#formSubmitHandler,
+      this.#rollupClickHandler,
+      this.#deleteClickHandler
     );
     replace(this.#pointEditComponent, this.#pointComponent);
     document.addEventListener('keydown', this.#escKeyDownHandler);
-    this.#onEditStart(this.#point.id); // Уведомляем TripPresenter, что эта точка редактируется
+    this.#onEditStart(this.#point.id);
     this.#isEditing = true;
   }
 
@@ -91,8 +85,8 @@ export default class PointPresenter {
       this.#point,
       currentDestination,
       currentOffersForPoint,
-      this.#handleEditClick,
-      this.#handleFavoriteClick
+      this.#editClickHandler,
+      this.#favoriteClickHandler
     );
 
     if (prevPointComponent.element?.parentElement) {
@@ -117,20 +111,19 @@ export default class PointPresenter {
     this.#pointComponent = null;
   }
 
-  #handleEditClick = () => {
+  #editClickHandler = () => {
     this.switchToEditMode();
   };
 
   #escKeyDownHandler = (evt) => {
     if (evt.key === 'Escape' || evt.key === 'Esc') {
       evt.preventDefault();
-      this.#pointEditComponent.resetToInitialState(); // Сначала сброс данных формы
-      this.resetView(); // Затем закрытие
+      this.#pointEditComponent.resetToInitialState();
+      this.resetView();
     }
   };
 
-  #handleFormSubmit = async (updatedPoint) => {
-    // Проверяем, были ли изменения. Если нет, просто закрываем форму.
+  #formSubmitHandler = async (updatedPoint) => {
     const isDataChanged = JSON.stringify(this.#point) !== JSON.stringify(updatedPoint);
     if (!isDataChanged && !this.#pointEditComponent._state.isSaving) {
       this.resetView();
@@ -141,7 +134,7 @@ export default class PointPresenter {
     this.#pointEditComponent.setSavingState(true);
     try {
       await this.#tripModel.updatePoint(UpdateType.MINOR, updatedPoint);
-      this.resetView(); // Закрываем форму после успешного сохранения
+      this.resetView();
     } catch (error) {
       this.#pointEditComponent.shake(() => {
         this.#pointEditComponent.setSavingState(false);
@@ -151,12 +144,12 @@ export default class PointPresenter {
     }
   };
 
-  #handleRollupClick = () => {
+  #rollupClickHandler = () => {
     this.#pointEditComponent.resetToInitialState();
     this.resetView();
   };
 
-  #handleDeleteClick = async () => {
+  #deleteClickHandler = async () => {
     this.#uiBlocker.block();
     this.#pointEditComponent.setDeletingState(true);
     try {
@@ -170,7 +163,7 @@ export default class PointPresenter {
     }
   };
 
-  #handleFavoriteClick = async () => {
+  #favoriteClickHandler = async () => {
     const updatedPoint = {
       id: this.#point.id,
       type: this.#point.type,
@@ -181,12 +174,9 @@ export default class PointPresenter {
       offers: this.#point.offers,
       isFavorite: !this.#point.isFavorite,
     };
-    // Не блокируем UI для favorite, только shake при ошибке
     try {
       await this.#tripModel.updatePoint(UpdateType.PATCH, updatedPoint);
-      // Модель обновится, TripPresenter перерисует (или только эту точку)
     } catch (error) {
-      // Эффект «покачивание головой» применяется к карточке точки маршрута
       this.#pointComponent.shake();
     }
   };

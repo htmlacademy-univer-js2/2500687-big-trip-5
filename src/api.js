@@ -9,14 +9,14 @@ export default class TripService extends ApiService {
   }
 
   async getPoints() {
-    const response = await this._load({ url: 'points' });
+    const response = await this._load({url: 'points'});
     const points = await ApiService.parseResponse(response);
     return points.map(this.#adaptPointToClient);
   }
 
   async getDestinations() {
     try {
-      const response = await this._load({ url: 'destinations' });
+      const response = await this._load({url: 'destinations'});
       const destinations = await ApiService.parseResponse(response);
       return destinations;
     } catch (error) {
@@ -26,9 +26,9 @@ export default class TripService extends ApiService {
 
   async getOffers() {
     try {
-      const response = await this._load({ url: 'offers' });
+      const response = await this._load({url: 'offers'});
       const allOffers = await ApiService.parseResponse(response);
-      return allOffers.reduce((acc, { type, offers }) => ({
+      return allOffers.reduce((acc, {type, offers }) => ({
         ...acc,
         [type.toLowerCase()]: offers,
       }), {});
@@ -43,7 +43,7 @@ export default class TripService extends ApiService {
       url: `points/${point.id}`,
       method: 'PUT',
       body: JSON.stringify(serverPoint),
-      headers: new Headers({ 'Content-Type': 'application/json' }),
+      headers: new Headers({'Content-Type': 'application/json'}),
     });
     const updatedPoint = await ApiService.parseResponse(response);
     return this.#adaptPointToClient(updatedPoint);
@@ -55,7 +55,7 @@ export default class TripService extends ApiService {
       url: 'points',
       method: 'POST',
       body: JSON.stringify(serverPoint),
-      headers: new Headers({ 'Content-Type': 'application/json' }),
+      headers: new Headers({'Content-Type': 'application/json'}),
     });
     const newPoint = await ApiService.parseResponse(response);
     return this.#adaptPointToClient(newPoint);
